@@ -43,7 +43,14 @@ const Admin = () => {
   const [feedDistrict, setFeedDistrict] = useState("");
   const [feedUpazila, setFeedUpazila] = useState("");
 
-  // Category form
+  // Scrape source form
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [scrapeName, setScrapeName] = useState("");
+  const [scrapeDivision, setScrapeDivision] = useState("");
+  const [scrapeDistrict, setScrapeDistrict] = useState("");
+  const [scrapeUpazila, setScrapeUpazila] = useState("");
+  const [scrapeCategory, setScrapeCategory] = useState("general");
+  const [scrapeInterval, setScrapeInterval] = useState("30");
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
   const [newCatParent, setNewCatParent] = useState("");
