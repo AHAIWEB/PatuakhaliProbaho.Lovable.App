@@ -58,6 +58,13 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Missionary design tokens */
+    --column-divider: 220 15% 82%;
+    --section-accent: 0 75% 48%;
+    --section-accent-alt: 215 60% 25%;
+    --breaking-bg: 0 85% 52%;
+    --breaking-foreground: 0 0% 100%;
   }
 }
 
@@ -76,31 +83,75 @@
 }
 
 @layer components {
+  /* ===== Missionary newspaper section title ===== */
   .news-section-title {
     @apply text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 sm:py-1.5 inline-block;
     background-color: hsl(var(--section-title-bg));
     color: hsl(var(--section-title-foreground));
+    clip-path: polygon(0 0, 95% 0, 100% 100%, 0% 100%);
   }
+
   .news-category-badge {
     @apply text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded-sm;
     background-color: hsl(var(--category-badge));
     color: hsl(var(--category-badge-foreground));
   }
+
+  /* ===== Missionary card style ===== */
   .news-card {
-    @apply bg-card border border-border rounded-sm overflow-hidden transition-shadow hover:shadow-md;
+    @apply bg-card border border-border overflow-hidden transition-all duration-200;
+    border-left: 3px solid hsl(var(--section-accent));
   }
+  .news-card:hover {
+    @apply shadow-lg;
+    border-left-color: hsl(var(--accent));
+    transform: translateY(-1px);
+  }
+
   .news-card-title {
     @apply text-sm sm:text-base font-bold leading-snug text-foreground hover:text-accent transition-colors cursor-pointer line-clamp-2;
   }
   .news-card-meta {
     @apply text-[10px] sm:text-xs text-muted-foreground;
   }
+
   .ticker-bar {
     background-color: hsl(var(--ticker-bg));
     color: hsl(var(--ticker-foreground));
   }
-  .column-left, .column-right {
-    @apply space-y-3 sm:space-y-4;
+
+  /* ===== Column dividers for missionary layout ===== */
+  .column-left {
+    @apply space-y-1;
+  }
+  .column-right {
+    @apply space-y-1;
+  }
+
+  @media (min-width: 1024px) {
+    .column-left {
+      border-right: 1px solid hsl(var(--column-divider));
+      padding-right: 1rem;
+    }
+    .column-right {
+      border-left: 1px solid hsl(var(--column-divider));
+      padding-left: 1rem;
+    }
+  }
+
+  /* ===== Numbered list for popular posts ===== */
+  .popular-number {
+    @apply text-2xl font-black shrink-0 w-8 text-center;
+    color: hsl(var(--accent));
+    text-shadow: 1px 1px 0 hsl(var(--border));
+  }
+
+  /* ===== Lead story (first post large) ===== */
+  .lead-story .news-card {
+    border-left-width: 4px;
+  }
+  .lead-story .news-card-title {
+    @apply text-base sm:text-lg;
   }
 }
 
