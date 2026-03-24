@@ -84,12 +84,18 @@ const Admin = () => {
     if (!quickUrl) return;
     setUrlFetching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("scrape-url", { body: { url: quickUrl } });
+      const { data, error } = await supabase.functions.invoke("scrape-url", { body: { url: quickUrl, fullContent: true } });
       if (error) throw error;
       if (data?.title) setQuickTitle(data.title);
-      if (data?.description) setQuickContent(data.description);
+      if (data?.content) setQuickContent(data.content);
+      else if (data?.description) setQuickContent(data.description);
       if (data?.image) setQuickImage(data.image);
-      toast({ title: "সফল", description: "URL থেকে ডাটা ফেচ হয়েছে" });
+      if (data?.category && !quickCategory) {
+        const matchedCat = categories.find(c => c.name.toLowerCase().includes(data.category.toLowerCase()) || c.slug.toLowerCase().includes(data.category.toLowerCase()));
+        if (matchedCat) setQuickCategory(matchedCat.id);
+      }
+      if (data?.tags?.length && !quickTags) setQuickTags(data.tags.join(", "));
+      toast({ title: "সফল", description: `"${data?.siteName || 'সাইট'}" থেকে আর্টিকেল ফেচ হয়েছে` });
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message || "URL ফেচ ব্যর্থ", variant: "destructive" });
     }
