@@ -441,9 +441,12 @@ const Admin = () => {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <CardTitle>সকল পোস্ট ({filteredPosts.length})</CardTitle>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input type="month" className="w-40" value={postDateFilter} onChange={(e) => { setPostDateFilter(e.target.value); setPostPage(0); }} />
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
+                    </div>
                   </div>
                 </div>
               </CardHeader>
