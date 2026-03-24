@@ -569,13 +569,26 @@ const PhotoCard = () => {
             {/* URL Fetch */}
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">URL থেকে ফেচ করুন</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
                 <div className="flex gap-2">
                   <Input placeholder="নিউজ URL পেস্ট করুন" value={fetchUrl} onChange={(e) => setFetchUrl(e.target.value)} className="flex-1" />
                   <Button onClick={handleFetchUrl} disabled={urlFetching || !fetchUrl} variant="outline" size="sm">
                     <Link2 className={`w-4 h-4 mr-1 ${urlFetching ? "animate-spin" : ""}`} />ফেচ
                   </Button>
                 </div>
+                {extractedQuotes.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">❝ AI কোটেশন ({extractedQuotes.length}টি):</p>
+                    <div className="max-h-28 overflow-y-auto space-y-1">
+                      {extractedQuotes.map((q, i) => (
+                        <button key={i} onClick={() => { setCustomQuote(q); toast({ title: "কোটেশন যুক্ত হয়েছে" }); }}
+                          className="w-full text-left text-xs p-1.5 rounded border bg-accent/10 hover:bg-accent/20 transition-colors leading-tight">
+                          ❝ {q.substring(0, 120)}{q.length > 120 ? "…" : ""} ❞
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
