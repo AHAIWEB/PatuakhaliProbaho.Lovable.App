@@ -97,14 +97,17 @@
     color: hsl(var(--category-badge-foreground));
   }
 
-  /* ===== Missionary card style ===== */
+  /* ===== Pinterest masonry card style ===== */
+  .masonry-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .news-card {
-    @apply bg-card border border-border overflow-hidden transition-all duration-200;
-    border-left: 3px solid hsl(var(--section-accent));
+    @apply bg-card border border-border overflow-hidden transition-all duration-200 rounded-lg;
   }
   .news-card:hover {
     @apply shadow-lg;
-    border-left-color: hsl(var(--accent));
     transform: translateY(-1px);
   }
 

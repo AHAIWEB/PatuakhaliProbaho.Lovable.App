@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLayoutSettings, getSectionCount } from "@/hooks/useLayoutSettings";
 import { ExternalLink } from "lucide-react";
 import { cleanText } from "@/lib/content";
+import type { Post } from "@/hooks/usePosts";
 
 const useCategoryPosts = (slug: string, limit = 4) =>
   useQuery({
@@ -42,6 +43,84 @@ const useCategoryPosts = (slug: string, limit = 4) =>
       return data ?? [];
     },
   });
+
+/* Pinterest-style masonry card with variable heights */
+const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "normal" | "small" }) => {
+  const postLink = `/post/${news.slug}`;
+  const excerpt = cleanText(news.content || news.excerpt || "").substring(0, size === "large" ? 200 : 80);
+
+  if (size === "small") {
+    return (
+      <div className="masonry-card group break-inside-avoid mb-3">
+        <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+          <div className="p-3">
+            <Link to={postLink} className="text-sm font-bold leading-snug text-foreground hover:text-accent transition-colors line-clamp-2 block">
+              {cleanText(news.title)}
+            </Link>
+            <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
+              <span>{news.source_name || "নিজস্ব"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="masonry-card group break-inside-avoid mb-3">
+      <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+        {news.image_url && (
+          <Link to={postLink} className="block overflow-hidden">
+            <img
+              src={news.image_url}
+              alt={news.title}
+              className={`w-full object-cover transition-transform duration-500 group-hover:scale-105 ${size === "large" ? "aspect-[4/3]" : "aspect-[16/10]"}`}
+              loading="lazy"
+            />
+          </Link>
+        )}
+        {news.is_highlighted && (
+          <span className="absolute top-2 left-2 bg-highlight text-foreground text-[10px] font-bold px-2 py-0.5 rounded-sm animate-pulse z-10">
+            📌
+          </span>
+        )}
+        <div className="p-2.5">
+          {news.source_category && (
+            <span className="text-[9px] font-medium bg-accent/10 text-accent px-1.5 py-0.5 rounded mb-1 inline-block">
+              {news.source_category}
+            </span>
+          )}
+          <Link to={postLink} className={`font-bold leading-snug text-foreground hover:text-accent transition-colors block mb-1 line-clamp-2 ${size === "large" ? "text-base" : "text-sm"}`}>
+            {cleanText(news.title)}
+          </Link>
+          {excerpt && size !== "small" && (
+            <p className="text-[11px] text-muted-foreground line-clamp-2 mb-1.5">{excerpt}…</p>
+          )}
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            {news.source_url ? (
+              <a href={news.source_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">
+                {news.source_name || "সোর্স"} <ExternalLink className="h-2 w-2" />
+              </a>
+            ) : (
+              <span>{news.source_name || "নিজস্ব"}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* Masonry column renderer */
+const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }) => {
+  return (
+    <div className={`columns-${columns} gap-3`} style={{ columnCount: columns }}>
+      {posts.map((news, i) => (
+        <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : "normal"} />
+      ))}
+    </div>
+  );
+};
 
 const Index = () => {
   const { data: layoutSettings } = useLayoutSettings();
@@ -75,10 +154,6 @@ const Index = () => {
     { title: "ময়মনসিংহ বিভাগ", posts: mymensinghPosts, slug: "mymensingh" },
   ];
 
-  // Lead story: first national post displayed large
-  const leadNational = (nationalPosts ?? [])[0];
-  const restNational = (nationalPosts ?? []).slice(1);
-
   return (
     <div className="min-h-screen bg-background">
       <TopBar />
@@ -86,199 +161,129 @@ const Index = () => {
       <CategoryNav />
       <NewsTicker />
 
-      <div className="container mx-auto px-3 sm:px-4 mt-3 sm:mt-4">
+      <div className="container mx-auto px-2 sm:px-4 mt-3">
         <AdSpace size="leaderboard" />
       </div>
 
-      <main className="container mx-auto px-3 sm:px-4 mt-4 sm:mt-6">
-        {/* === 3-Column Missionary Layout === */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+      <main className="container mx-auto px-2 sm:px-4 mt-4">
+        {/* === Pinterest-Style Masonry Layout === */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
 
-          {/* ========= LEFT COLUMN - 25% ========= */}
+          {/* ========= LEFT SIDEBAR - Pinterest Style ========= */}
           {sc("national") > 0 && (
-            <aside className="lg:col-span-1 column-left order-2 lg:order-1">
+            <aside className="lg:col-span-3 order-2 lg:order-1 space-y-4">
               <SectionTitle title="জাতীয় সংবাদ" accent="red" />
-
-              {/* Lead story */}
-              {leadNational && (
-                <div className="lead-story mb-3">
-                  <div className="news-card group">
-                    <Link to={`/post/${leadNational.slug}`} className="block">
-                      {leadNational.image_url ? (
-                        <img src={leadNational.image_url} alt={leadNational.title}
-                          className="w-full aspect-[4/3] object-cover transition-transform group-hover:scale-105" loading="lazy" />
-                      ) : (
-                        <div className="w-full aspect-[4/3] bg-gradient-to-br from-muted to-muted/50" />
-                      )}
-                    </Link>
-                    <div className="p-2.5">
-                      <Link to={`/post/${leadNational.slug}`} className="news-card-title text-sm sm:text-base block mb-1">
-                        {cleanText(leadNational.title)}
-                      </Link>
-                      <p className="text-[11px] text-muted-foreground line-clamp-2">
-                        {cleanText(leadNational.excerpt || leadNational.content || "").substring(0, 100)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {restNational.map((news) => (
-                <NewsCard key={news.id} news={news} variant="compact" />
-              ))}
-
-              <AdSpace size="sidebar" className="mt-4" />
+              <div className="columns-1 gap-3">
+                {(nationalPosts ?? []).map((news, i) => (
+                  <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : i < 3 ? "normal" : "small"} />
+                ))}
+              </div>
 
               {sc("international") > 0 && (
                 <>
-                  <SectionTitle title="আন্তর্জাতিক" className="mt-5" />
-                  {(internationalPosts ?? []).slice(0, sc("international", 4)).map((news) => (
-                    <NewsCard key={news.id} news={news} variant="compact" />
-                  ))}
+                  <SectionTitle title="আন্তর্জাতিক" />
+                  <div className="columns-1 gap-3">
+                    {(internationalPosts ?? []).map((news) => (
+                      <MasonryCard key={news.id} news={news} size="small" />
+                    ))}
+                  </div>
                 </>
               )}
 
+              <AdSpace size="sidebar" />
+
               {sc("politics") > 0 && (
                 <>
-                  <SectionTitle title="রাজনীতি" className="mt-5" />
-                  {(politicsPosts ?? []).slice(0, sc("politics", 4)).map((news) => (
-                    <NewsCard key={news.id} news={news} variant="compact" />
-                  ))}
+                  <SectionTitle title="রাজনীতি" />
+                  <div className="columns-1 gap-3">
+                    {(politicsPosts ?? []).map((news, i) => (
+                      <MasonryCard key={news.id} news={news} size={i === 0 ? "normal" : "small"} />
+                    ))}
+                  </div>
                 </>
               )}
 
               {sc("technology") > 0 && (
                 <>
-                  <SectionTitle title="প্রযুক্তি" className="mt-5" />
-                  {(techPosts ?? []).slice(0, sc("technology", 3)).map((news) => (
-                    <NewsCard key={news.id} news={news} variant="compact" />
-                  ))}
+                  <SectionTitle title="প্রযুক্তি" />
+                  <div className="columns-1 gap-3">
+                    {(techPosts ?? []).map((news) => (
+                      <MasonryCard key={news.id} news={news} size="small" />
+                    ))}
+                  </div>
                 </>
               )}
-
-              <AdSpace size="sidebar" className="mt-4" />
             </aside>
           )}
 
-          {/* ========= MAIN COLUMN - 50% ========= */}
-          <div className="lg:col-span-2 order-1 lg:order-2">
+          {/* ========= MAIN - Pinterest Masonry ========= */}
+          <div className="lg:col-span-6 order-1 lg:order-2">
             <FeaturedSlider />
 
-            {/* Highlighted Posts */}
+            {/* Highlighted - masonry 2 cols */}
             {(highlightedPosts ?? []).length > 0 && sc("highlighted") > 0 && (
-              <>
+              <div className="mt-4">
                 <SectionTitle title="📌 হাইলাইটস" accent="red" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                  {(highlightedPosts ?? []).slice(0, sc("highlighted", 4)).map((news) => (
-                    <NewsCard key={news.id} news={news} />
-                  ))}
-                </div>
-              </>
+                <MasonryGrid posts={(highlightedPosts ?? []).slice(0, sc("highlighted", 4))} columns={2} />
+              </div>
             )}
 
-            {/* Barisal Section - Lead + grid */}
-            {sc("barisal") > 0 && (
-              <>
+            {/* Barisal - Pinterest masonry */}
+            {sc("barisal") > 0 && (barisalPosts ?? []).length > 0 && (
+              <div className="mt-4">
                 <SectionTitle title="বরিশাল বিভাগ" accent="red" />
-                {(barisalPosts ?? []).length > 0 && (
-                  <div className="mb-5">
-                    {/* First post as lead */}
-                    <div className="lead-story mb-3">
-                      <div className="news-card group">
-                        <div className="sm:flex">
-                          <Link to={`/post/${(barisalPosts ?? [])[0]?.slug}`} className="block sm:w-1/2">
-                            {(barisalPosts ?? [])[0]?.image_url ? (
-                              <img src={(barisalPosts ?? [])[0]?.image_url!} alt=""
-                                className="w-full aspect-[16/10] sm:h-full object-cover" loading="lazy" />
-                            ) : (
-                              <div className="w-full aspect-[16/10] sm:h-full bg-muted" />
-                            )}
-                          </Link>
-                          <div className="p-3 sm:w-1/2 flex flex-col justify-center">
-                            <Link to={`/post/${(barisalPosts ?? [])[0]?.slug}`} className="news-card-title text-base sm:text-lg block mb-2">
-                              {cleanText((barisalPosts ?? [])[0]?.title || "")}
-                            </Link>
-                            <p className="text-xs text-muted-foreground line-clamp-3">
-                              {cleanText((barisalPosts ?? [])[0]?.excerpt || (barisalPosts ?? [])[0]?.content || "").substring(0, 150)}
-                            </p>
-                            {(barisalPosts ?? [])[0]?.source_url && (
-                              <a href={(barisalPosts ?? [])[0]?.source_url!} target="_blank" rel="noopener noreferrer"
-                                className="text-accent text-[11px] mt-2 inline-flex items-center gap-1 hover:underline">
-                                সূত্র <ExternalLink className="h-2.5 w-2.5" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Rest in grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {(barisalPosts ?? []).slice(1).map((news) => (
-                        <NewsCard key={news.id} news={news} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                <MasonryGrid posts={(barisalPosts ?? []).slice(0, sc("barisal", 6))} columns={2} />
+              </div>
             )}
 
-            <AdSpace size="banner" className="my-5" />
+            <AdSpace size="banner" className="my-4" />
 
-            {/* Category Sections */}
+            {/* Sports & Entertainment - masonry */}
             {sc("sports") > 0 && (
-              <>
+              <div className="mt-4">
                 <SectionTitle title="খেলাধুলা" />
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  {(sportsPosts ?? []).slice(0, sc("sports", 4)).map((news) => (
-                    <NewsCard key={news.id} news={news} />
-                  ))}
-                </div>
-              </>
+                <MasonryGrid posts={(sportsPosts ?? []).slice(0, sc("sports", 4))} columns={2} />
+              </div>
             )}
 
             {sc("entertainment") > 0 && (
-              <>
+              <div className="mt-4">
                 <SectionTitle title="বিনোদন" />
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  {(entertainmentPosts ?? []).slice(0, sc("entertainment", 4)).map((news) => (
-                    <NewsCard key={news.id} news={news} />
-                  ))}
-                </div>
-              </>
+                <MasonryGrid posts={(entertainmentPosts ?? []).slice(0, sc("entertainment", 4))} columns={2} />
+              </div>
             )}
           </div>
 
-          {/* ========= RIGHT COLUMN - 25% ========= */}
-          <aside className="lg:col-span-1 column-right order-3">
+          {/* ========= RIGHT SIDEBAR - Pinterest Style ========= */}
+          <aside className="lg:col-span-3 order-3 space-y-4">
             {divisionSections.map((section) => {
               const count = sc(section.slug, 3);
-              if (count <= 0) return null;
+              if (count <= 0 || !(section.posts ?? []).length) return null;
               return (
-                <div key={section.slug} className="mb-4">
+                <div key={section.slug}>
                   <SectionTitle title={section.title} />
-                  {(section.posts ?? []).slice(0, count).map((news) => (
-                    <NewsCard key={news.id} news={news} variant="compact" />
-                  ))}
-                  <Link
-                    to={`/category/${section.slug}`}
-                    className="text-[11px] text-accent hover:underline block mt-1.5 font-medium"
-                  >
+                  <div className="columns-1 gap-3">
+                    {(section.posts ?? []).slice(0, count).map((news, i) => (
+                      <MasonryCard key={news.id} news={news} size={i === 0 ? "normal" : "small"} />
+                    ))}
+                  </div>
+                  <Link to={`/category/${section.slug}`} className="text-[11px] text-accent hover:underline block mt-1 font-medium">
                     আরও পড়ুন →
                   </Link>
                 </div>
               );
             })}
 
-            <AdSpace size="sidebar" className="mt-3" />
+            <AdSpace size="sidebar" />
 
-            {/* Popular Posts */}
+            {/* Popular - numbered list */}
             {sc("popular") > 0 && (
               <>
-                <SectionTitle title="জনপ্রিয় সংবাদ" className="mt-5" accent="red" />
+                <SectionTitle title="জনপ্রিয় সংবাদ" accent="red" />
                 {(popularPosts ?? []).map((news, i) => (
-                  <div key={news.id} className="flex gap-3 py-2.5 border-b border-border last:border-0">
-                    <span className="popular-number">{i + 1}</span>
-                    <Link to={`/post/${news.slug}`} className="news-card-title text-sm flex-1">
+                  <div key={news.id} className="flex gap-2.5 py-2 border-b border-border last:border-0">
+                    <span className="popular-number text-lg">{i + 1}</span>
+                    <Link to={`/post/${news.slug}`} className="text-xs font-bold text-foreground hover:text-accent transition-colors flex-1 line-clamp-2">
                       {cleanText(news.title)}
                     </Link>
                   </div>
