@@ -327,6 +327,8 @@ const Admin = () => {
 
   const currentDistricts = feedDivision ? divisionDistricts[feedDivision] || [] : [];
   const currentUpazilas = feedDistrict ? currentDistricts.find((d) => d.name === feedDistrict)?.upazilas || [] : [];
+  const scrapeDistricts = scrapeDivision ? divisionDistricts[scrapeDivision] || [] : [];
+  const scrapeUpazilasList = scrapeDistrict ? scrapeDistricts.find((d) => d.name === scrapeDistrict)?.upazilas || [] : [];
 
   if (authLoading) return <div className="flex items-center justify-center min-h-screen">লোড হচ্ছে...</div>;
 
