@@ -70,7 +70,6 @@ function generateSlug(title: string): string {
     .substring(0, 100) + "-" + Date.now().toString(36);
 }
 
-// Category keyword mapping for auto-assignment
 const categoryKeywords: Record<string, string[]> = {
   "national": ["জাতীয়", "national", "bangladesh", "বাংলাদেশ", "সরকার", "government"],
   "politics": ["রাজনীতি", "politics", "political", "সংসদ", "নির্বাচন", "election"],
@@ -107,15 +106,26 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get active RSS feeds
+    // Parse optional batch params
+    let batchSize = 15;
+    let offset = 0;
+    try {
+      const body = await req.json();
+      if (body?.batchSize) batchSize = Math.min(body.batchSize, 30);
+      if (body?.offset) offset = body.offset;
+    } catch { /* no body, use defaults */ }
+
+    // Get active RSS feeds with pagination (oldest fetched first)
     const { data: feeds, error: feedError } = await supabase
       .from("rss_feeds")
       .select("*")
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .order("last_fetched_at", { ascending: true, nullsFirst: true })
+      .range(offset, offset + batchSize - 1);
 
     if (feedError) throw feedError;
     if (!feeds || feeds.length === 0) {
-      return new Response(JSON.stringify({ message: "No active feeds", fetched: 0 }), {
+      return new Response(JSON.stringify({ message: "No active feeds in this batch", fetched: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -132,60 +142,70 @@ Deno.serve(async (req) => {
     let totalInserted = 0;
     const errors: string[] = [];
 
-    for (const feed of feeds) {
+    // Process feeds concurrently in groups of 5
+    const processOneFeed = async (feed: typeof feeds[0]) => {
       try {
         const response = await fetch(feed.url, {
           headers: { "User-Agent": "PatuakhaliProbaho/1.0 RSS Reader" },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (!response.ok) {
           errors.push(`${feed.name}: HTTP ${response.status}`);
-          continue;
+          return;
         }
 
         const xml = await response.text();
         const items = parseRSSItems(xml);
 
-        for (const item of items.slice(0, 20)) {
-          // Check for duplicate by source_url
-          const { data: existing } = await supabase
-            .from("posts")
-            .select("id")
-            .eq("source_url", item.link)
-            .maybeSingle();
+        // Batch check duplicates
+        const sourceUrls = items.slice(0, 15).map((i) => i.link);
+        const { data: existingPosts } = await supabase
+          .from("posts")
+          .select("source_url")
+          .in("source_url", sourceUrls);
+        const existingUrls = new Set((existingPosts || []).map((p) => p.source_url));
 
-          if (existing) continue;
+        const newItems = items.slice(0, 15).filter((item) => !existingUrls.has(item.link));
 
-          // Auto-assign category_id
-          let categoryId: string | null = null;
-          const matchedSlug = matchCategorySlug(feed.category || "", item.category, feed.name);
-          if (matchedSlug && categoryMap.has(matchedSlug)) {
-            categoryId = categoryMap.get(matchedSlug)!;
-          }
+        if (newItems.length > 0) {
+          const rows = newItems.map((item) => {
+            let categoryId: string | null = null;
+            const matchedSlug = matchCategorySlug(feed.category || "", item.category, feed.name);
+            if (matchedSlug && categoryMap.has(matchedSlug)) {
+              categoryId = categoryMap.get(matchedSlug)!;
+            }
+            if (!categoryId && feed.division && categoryMap.has(feed.division)) {
+              categoryId = categoryMap.get(feed.division)!;
+            }
 
-          // If feed has a division, try to assign division category
-          if (!categoryId && feed.division && categoryMap.has(feed.division)) {
-            categoryId = categoryMap.get(feed.division)!;
-          }
-
-          const { error: insertError } = await supabase.from("posts").insert({
-            title: item.title,
-            slug: generateSlug(item.title),
-            content: item.description,
-            excerpt: item.description.substring(0, 200),
-            image_url: item.imageUrl,
-            source_url: item.link,
-            source_name: feed.name,
-            division: feed.division,
-            tags: item.category ? [item.category] : [],
-            status: "published",
-            rss_feed_id: feed.id,
-            published_at: item.pubDate,
-            category_id: categoryId,
+            return {
+              title: item.title,
+              slug: generateSlug(item.title),
+              content: item.description,
+              excerpt: item.description.substring(0, 200),
+              image_url: item.imageUrl,
+              source_url: item.link,
+              source_name: feed.name,
+              division: feed.division,
+              tags: item.category ? [item.category] : [],
+              status: "published",
+              rss_feed_id: feed.id,
+              published_at: item.pubDate,
+              category_id: categoryId,
+            };
           });
 
-          if (!insertError) totalInserted++;
+          const { error: insertError, data: inserted } = await supabase
+            .from("posts")
+            .insert(rows)
+            .select("id");
+
+          if (!insertError && inserted) {
+            totalInserted += inserted.length;
+          } else if (insertError) {
+            errors.push(`${feed.name}: Insert error - ${insertError.message}`);
+          }
         }
 
         // Update last_fetched_at
@@ -196,10 +216,25 @@ Deno.serve(async (req) => {
       } catch (e) {
         errors.push(`${feed.name}: ${e instanceof Error ? e.message : "Unknown error"}`);
       }
+    };
+
+    // Process in parallel chunks of 5
+    for (let i = 0; i < feeds.length; i += 5) {
+      const chunk = feeds.slice(i, i + 5);
+      await Promise.allSettled(chunk.map(processOneFeed));
     }
 
+    const { count } = await supabase.from("rss_feeds").select("*", { count: "exact", head: true }).eq("is_active", true);
+
     return new Response(
-      JSON.stringify({ message: "RSS fetch complete", fetched: totalInserted, errors }),
+      JSON.stringify({
+        message: "RSS fetch complete",
+        fetched: totalInserted,
+        processedFeeds: feeds.length,
+        totalFeeds: count,
+        nextOffset: offset + batchSize,
+        errors: errors.slice(0, 10),
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
