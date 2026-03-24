@@ -70,6 +70,33 @@ function generateSlug(title: string): string {
     .substring(0, 100) + "-" + Date.now().toString(36);
 }
 
+// Category keyword mapping for auto-assignment
+const categoryKeywords: Record<string, string[]> = {
+  "national": ["জাতীয়", "national", "bangladesh", "বাংলাদেশ", "সরকার", "government"],
+  "politics": ["রাজনীতি", "politics", "political", "সংসদ", "নির্বাচন", "election"],
+  "world": ["বিশ্ব", "world", "international", "আন্তর্জাতিক", "global"],
+  "sports": ["খেলা", "sports", "cricket", "football", "ক্রিকেট", "ফুটবল"],
+  "entertainment": ["বিনোদন", "entertainment", "movie", "film", "সিনেমা", "নাটক", "bollywood", "hollywood", "tollywood"],
+  "economy": ["অর্থনীতি", "economy", "business", "ব্যবসা", "বাজার", "finance"],
+  "education": ["শিক্ষা", "education", "বিশ্ববিদ্যালয়", "স্কুল", "পরীক্ষা"],
+  "technology": ["প্রযুক্তি", "technology", "tech", "digital", "ডিজিটাল", "software"],
+  "health": ["স্বাস্থ্য", "health", "medical", "চিকিৎসা", "হাসপাতাল"],
+  "lifestyle": ["লাইফস্টাইল", "lifestyle", "fashion", "ফ্যাশন", "রান্না", "cooking"],
+  "religion": ["ধর্ম", "religion", "ইসলাম", "islam", "মসজিদ"],
+  "travel": ["ভ্রমণ", "travel", "tourism", "পর্যটন"],
+  "trending": ["আলোচিত", "trending", "viral", "ভাইরাল"],
+};
+
+function matchCategorySlug(feedCategory: string, itemCategory: string | null, feedName: string): string | null {
+  const searchText = `${feedCategory} ${itemCategory || ""} ${feedName}`.toLowerCase();
+  for (const [slug, keywords] of Object.entries(categoryKeywords)) {
+    for (const kw of keywords) {
+      if (searchText.includes(kw.toLowerCase())) return slug;
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -91,6 +118,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ message: "No active feeds", fetched: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Load all categories for slug->id mapping
+    const { data: dbCategories } = await supabase.from("categories").select("id, slug, parent_id");
+    const categoryMap = new Map<string, string>();
+    if (dbCategories) {
+      for (const cat of dbCategories) {
+        categoryMap.set(cat.slug, cat.id);
+      }
     }
 
     let totalInserted = 0;
@@ -121,6 +157,18 @@ Deno.serve(async (req) => {
 
           if (existing) continue;
 
+          // Auto-assign category_id
+          let categoryId: string | null = null;
+          const matchedSlug = matchCategorySlug(feed.category || "", item.category, feed.name);
+          if (matchedSlug && categoryMap.has(matchedSlug)) {
+            categoryId = categoryMap.get(matchedSlug)!;
+          }
+
+          // If feed has a division, try to assign division category
+          if (!categoryId && feed.division && categoryMap.has(feed.division)) {
+            categoryId = categoryMap.get(feed.division)!;
+          }
+
           const { error: insertError } = await supabase.from("posts").insert({
             title: item.title,
             slug: generateSlug(item.title),
@@ -134,6 +182,7 @@ Deno.serve(async (req) => {
             status: "published",
             rss_feed_id: feed.id,
             published_at: item.pubDate,
+            category_id: categoryId,
           });
 
           if (!insertError) totalInserted++;

@@ -392,13 +392,30 @@ const Admin = () => {
                   <form onSubmit={handleAddFeed} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                     <Input placeholder="RSS URL *" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required />
                     <Input placeholder="নাম *" value={feedName} onChange={(e) => setFeedName(e.target.value)} required />
-                    <Input placeholder="বিভাগ (যেমন: barisal)" value={feedDivision} onChange={(e) => setFeedDivision(e.target.value)} />
+                    <select className="border rounded-md p-2 bg-background" value={feedDivision} onChange={(e) => setFeedDivision(e.target.value)}>
+                      <option value="">বিভাগ নির্বাচন করুন</option>
+                      <option value="barisal">বরিশাল</option>
+                      <option value="dhaka">ঢাকা</option>
+                      <option value="chittagong">চট্টগ্রাম</option>
+                      <option value="sylhet">সিলেট</option>
+                      <option value="rajshahi">রাজশাহী</option>
+                      <option value="rangpur">রংপুর</option>
+                      <option value="khulna">খুলনা</option>
+                      <option value="mymensingh">ময়মনসিংহ</option>
+                    </select>
                     <select className="border rounded-md p-2 bg-background" value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)}>
                       <option value="general">সাধারণ</option>
                       <option value="national">জাতীয়</option>
                       <option value="international">আন্তর্জাতিক</option>
                       <option value="divisional">বিভাগীয়</option>
                       <option value="tv">টিভি</option>
+                      <option value="sports">খেলা</option>
+                      <option value="entertainment">বিনোদন</option>
+                      <option value="education">শিক্ষা</option>
+                      <option value="technology">প্রযুক্তি</option>
+                      <option value="health">স্বাস্থ্য</option>
+                      <option value="economy">অর্থনীতি</option>
+                      <option value="lifestyle">লাইফস্টাইল</option>
                     </select>
                     <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />ফিড যুক্ত করুন</Button>
                   </form>
