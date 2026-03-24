@@ -82,9 +82,9 @@ const Index = () => {
         <AdSpace size="leaderboard" />
       </div>
 
-      <main className="container mx-auto px-4 mt-6">
+      <main className="container mx-auto px-3 sm:px-4 mt-4 sm:mt-6">
         {/* === 3-Column Missionary Layout === */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
 
           {/* ========= LEFT COLUMN - 25% ========= */}
           <aside className="lg:col-span-1 column-left order-2 lg:order-1 space-y-1">
