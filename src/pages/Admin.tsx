@@ -701,6 +701,9 @@ const Admin = () => {
                         <TableCell className="text-xs">{src.last_scraped_at ? new Date(src.last_scraped_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
                         <TableCell className="text-xs">
                           {src.last_error ? <span className="text-destructive" title={src.last_error}>❌ ত্রুটি</span> : <span className="text-green-600">✅ সক্রিয়</span>}
+                          {src.selector_config && Object.keys(src.selector_config).filter(k => src.selector_config[k]).length > 0 && (
+                            <span className="ml-1 text-accent" title={JSON.stringify(src.selector_config)}>🎯</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive">
