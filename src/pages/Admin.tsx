@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { cleanText } from "@/lib/content";
+import { useLayoutSettings, useUpdateLayoutSetting } from "@/hooks/useLayoutSettings";
 
 type Post = Tables<"posts">;
 type RSSFeed = Tables<"rss_feeds">;
@@ -465,6 +466,9 @@ const Admin = () => {
             </TabsTrigger>
             <TabsTrigger value="categories" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
               <Tag className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />ক্যাটাগরি
+            </TabsTrigger>
+            <TabsTrigger value="layout" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Settings2 className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />লেআউট
             </TabsTrigger>
           </TabsList>
 
@@ -981,9 +985,66 @@ const Admin = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          {/* Layout Settings Tab */}
+          <TabsContent value="layout">
+            <LayoutSettingsTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const LayoutSettingsTab = () => {
+  const { data: settings, isLoading } = useLayoutSettings();
+  const updateSetting = useUpdateLayoutSetting();
+  const { toast } = useToast();
+
+  if (isLoading) return <div className="p-4 text-center text-sm text-muted-foreground">লোড হচ্ছে...</div>;
+
+  return (
+    <Card>
+      <CardHeader className="p-3 sm:p-6">
+        <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+          <Settings2 className="w-4 h-4" /> হোমপেজ লেআউট সেটিংস
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">প্রতিটি সেকশনে কতটি পোস্ট দেখাবে তা নিয়ন্ত্রণ করুন</p>
+      </CardHeader>
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-2">
+        {(settings ?? []).map((s) => (
+          <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
+            <button
+              onClick={() => {
+                updateSetting.mutate({ id: s.id, is_visible: !s.is_visible });
+                toast({ title: s.is_visible ? "হাইড করা হয়েছে" : "দেখানো হচ্ছে" });
+              }}
+              className="shrink-0"
+            >
+              {s.is_visible ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+            </button>
+            <span className={`text-xs sm:text-sm flex-1 font-medium ${!s.is_visible ? "opacity-50" : ""}`}>
+              {s.section_label}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="outline" className="h-7 w-7"
+                disabled={s.post_count <= 1}
+                onClick={() => {
+                  updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) });
+                }}>
+                <Minus className="w-3 h-3" />
+              </Button>
+              <span className="w-7 text-center text-sm font-bold">{s.post_count}</span>
+              <Button size="icon" variant="outline" className="h-7 w-7"
+                onClick={() => {
+                  updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 });
+                }}>
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 };
 

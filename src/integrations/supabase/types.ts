@@ -79,6 +79,36 @@ export type Database = {
           },
         ]
       }
+      layout_settings: {
+        Row: {
+          id: string
+          is_visible: boolean
+          post_count: number
+          section_key: string
+          section_label: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          is_visible?: boolean
+          post_count?: number
+          section_key: string
+          section_label: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          is_visible?: boolean
+          post_count?: number
+          section_key?: string
+          section_label?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           author_id: string | null
