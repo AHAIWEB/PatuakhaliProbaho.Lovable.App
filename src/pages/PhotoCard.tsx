@@ -76,16 +76,19 @@ const PhotoCard = () => {
     reader.readAsDataURL(file);
   };
 
+  const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
+
   const handleFetchUrl = async () => {
     if (!fetchUrl) return;
     setUrlFetching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("scrape-url", { body: { url: fetchUrl } });
+      const { data, error } = await supabase.functions.invoke("scrape-url", { body: { url: fetchUrl, fullContent: true } });
       if (error) throw error;
       if (data?.title) setCustomTitle(data.title);
       if (data?.image) setFetchedImage(data.image);
+      if (data?.quotes?.length) setExtractedQuotes(data.quotes);
       setQrUrl(fetchUrl);
-      toast({ title: "সফল", description: "URL থেকে ডাটা ফেচ হয়েছে" });
+      toast({ title: "সফল", description: `ফেচ হয়েছে (${data?.quotes?.length || 0}টি কোটেশন পাওয়া গেছে)` });
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message || "ফেচ ব্যর্থ", variant: "destructive" });
     }

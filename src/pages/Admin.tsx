@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Post = Tables<"posts">;
@@ -34,6 +34,7 @@ const Admin = () => {
   const [quickCategory, setQuickCategory] = useState("");
   const [quickTags, setQuickTags] = useState("");
   const [urlFetching, setUrlFetching] = useState(false);
+  const [quickSummary, setQuickSummary] = useState("");
 
   // RSS feed form
   const [feedUrl, setFeedUrl] = useState("");
@@ -69,6 +70,7 @@ const Admin = () => {
   const [postSearch, setPostSearch] = useState("");
   const [postPage, setPostPage] = useState(0);
   const [postDateFilter, setPostDateFilter] = useState("");
+  const [postSourceFilter, setPostSourceFilter] = useState<"all" | "rss" | "scraper" | "manual">("all");
   const postsPerPage = 50;
 
   // RSS fetch progress
@@ -105,12 +107,13 @@ const Admin = () => {
       if (data?.content) setQuickContent(data.content);
       else if (data?.description) setQuickContent(data.description);
       if (data?.image) setQuickImage(data.image);
+      if (data?.summary) setQuickSummary(data.summary);
       if (data?.category && !quickCategory) {
-        const matchedCat = categories.find(c => c.name.toLowerCase().includes(data.category.toLowerCase()) || c.slug.toLowerCase().includes(data.category.toLowerCase()));
+        const matchedCat = categories.find(c => c.slug.toLowerCase() === data.category.toLowerCase());
         if (matchedCat) setQuickCategory(matchedCat.id);
       }
       if (data?.tags?.length && !quickTags) setQuickTags(data.tags.join(", "));
-      toast({ title: "সফল", description: `"${data?.siteName || 'সাইট'}" থেকে আর্টিকেল ফেচ হয়েছে` });
+      toast({ title: "সফল", description: `"${data?.siteName || 'সাইট'}" থেকে ফেচ হয়েছে (ক্যাটাগরি: ${data?.category || 'অজানা'})` });
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message || "URL ফেচ ব্যর্থ", variant: "destructive" });
     }
@@ -122,7 +125,7 @@ const Admin = () => {
     setLoading(true);
     const slug = quickTitle.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-").substring(0, 100) + "-" + Date.now().toString(36);
     const { error } = await supabase.from("posts").insert({
-      title: quickTitle, slug, content: quickContent, excerpt: quickContent.substring(0, 200),
+      title: quickTitle, slug, content: quickContent, excerpt: (quickSummary || quickContent).substring(0, 200),
       image_url: quickImage || null, source_url: quickUrl || null, category_id: quickCategory || null,
       tags: quickTags ? quickTags.split(",").map((t) => t.trim()) : [], status: "published", author_id: user!.id,
     });
@@ -130,7 +133,7 @@ const Admin = () => {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "পোস্ট প্রকাশিত হয়েছে" });
-      setQuickTitle(""); setQuickContent(""); setQuickImage(""); setQuickUrl(""); setQuickTags(""); setQuickCategory("");
+      setQuickTitle(""); setQuickContent(""); setQuickImage(""); setQuickUrl(""); setQuickTags(""); setQuickCategory(""); setQuickSummary("");
       fetchData();
     }
     setLoading(false);
@@ -140,6 +143,7 @@ const Admin = () => {
     e.preventDefault();
     const { error } = await supabase.from("rss_feeds").insert({
       url: feedUrl, name: feedName, division: feedDivision || null, category: feedCategory,
+      district: feedDistrict || null, upazila: feedUpazila || null,
     });
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
@@ -155,26 +159,14 @@ const Admin = () => {
     let totalFetched = 0;
     let offset = 0;
     const batchSize = 15;
-
-    // Fetch in batches to avoid timeout
     for (let batch = 0; batch < 15; batch++) {
       setFetchProgress(`ব্যাচ ${batch + 1} প্রসেসিং... (${totalFetched} নিউজ ফেচ হয়েছে)`);
-      const { data, error } = await supabase.functions.invoke("fetch-rss", {
-        body: { batchSize, offset },
-      });
-
-      if (error) {
-        toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
-        break;
-      }
-
+      const { data, error } = await supabase.functions.invoke("fetch-rss", { body: { batchSize, offset } });
+      if (error) { toast({ title: "ত্রুটি", description: error.message, variant: "destructive" }); break; }
       totalFetched += data?.fetched || 0;
       offset = data?.nextOffset || offset + batchSize;
-
-      // If processed fewer feeds than batch size, we're done
       if ((data?.processedFeeds || 0) < batchSize) break;
     }
-
     setFetchProgress("");
     toast({ title: "সফল", description: `মোট ${totalFetched}টি নিউজ ফেচ হয়েছে` });
     fetchData();
@@ -213,10 +205,8 @@ const Admin = () => {
       district: scrapeDistrict || null, upazila: scrapeUpazila || null,
       category: scrapeCategory, scrape_interval_minutes: parseInt(scrapeInterval) || 30,
       selector_config: (scrapeArticleSelector || scrapeTitleSelector || scrapeImageSelector || scrapeLinkSelector) ? {
-        article: scrapeArticleSelector || null,
-        title: scrapeTitleSelector || null,
-        image: scrapeImageSelector || null,
-        link: scrapeLinkSelector || null,
+        article: scrapeArticleSelector || null, title: scrapeTitleSelector || null,
+        image: scrapeImageSelector || null, link: scrapeLinkSelector || null,
       } : {},
     } as any);
     if (error) {
@@ -287,15 +277,37 @@ const Admin = () => {
     fetchData();
   };
 
+  // Share to Blogger
+  const shareToBlogger = (post: Post) => {
+    const bloggerUrl = `https://www.blogger.com/blog-this.g?n=${encodeURIComponent(post.title)}&b=${encodeURIComponent(post.content?.substring(0, 500) || post.title)}&t=${encodeURIComponent(post.title)}&eurl=${encodeURIComponent(post.source_url || window.location.origin + "/post/" + post.slug)}`;
+    window.open(bloggerUrl, "_blank", "width=700,height=500");
+  };
+
+  // Share post link
+  const sharePost = (post: Post) => {
+    const url = `${window.location.origin}/post/${post.slug}`;
+    if (navigator.share) {
+      navigator.share({ title: post.title, url });
+    } else {
+      navigator.clipboard.writeText(url);
+      toast({ title: "লিংক কপি হয়েছে" });
+    }
+  };
+
+  // Filter posts by source type
   const filteredPosts = posts.filter((p) => {
     const matchSearch = !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
       (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase());
     const matchDate = !postDateFilter || (p.published_at && p.published_at.startsWith(postDateFilter));
-    return matchSearch && matchDate;
+    let matchSource = true;
+    if (postSourceFilter === "rss") matchSource = !!p.rss_feed_id;
+    else if (postSourceFilter === "scraper") matchSource = !p.rss_feed_id && !!p.source_name && !p.author_id;
+    else if (postSourceFilter === "manual") matchSource = !!p.author_id;
+    return matchSearch && matchDate && matchSource;
   });
   const pagedPosts = filteredPosts.slice(postPage * postsPerPage, (postPage + 1) * postsPerPage);
 
-  // District/Upazila data for RSS form
+  // District/Upazila data
   const divisionDistricts: Record<string, { name: string; upazilas: string[] }[]> = {
     barisal: [
       { name: "বরিশাল", upazilas: ["বরিশাল সদর", "বাবুগঞ্জ", "বাকেরগঞ্জ", "বানারীপাড়া", "গৌরনদী", "আগৈলঝাড়া", "মেহেন্দিগঞ্জ", "মুলাদী", "হিজলা", "উজিরপুর"] },
@@ -346,49 +358,72 @@ const Admin = () => {
 
   if (authLoading) return <div className="flex items-center justify-center min-h-screen">লোড হচ্ছে...</div>;
 
+  const rssPostCount = posts.filter(p => !!p.rss_feed_id).length;
+  const scraperPostCount = posts.filter(p => !p.rss_feed_id && !!p.source_name && !p.author_id).length;
+  const manualPostCount = posts.filter(p => !!p.author_id).length;
+
   return (
     <div className="min-h-screen bg-muted/30">
-      <div className="bg-primary text-primary-foreground p-4">
-        <div className="container mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold">📋 এডমিন প্যানেল</h1>
-          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-            <span className="text-sm opacity-80">রোল: {userRole}</span>
-            <Button variant="secondary" size="sm" onClick={() => navigate("/photo-card")}>
-              <Camera className="w-4 h-4 mr-1" />ফটোকার্ড
+      {/* Mobile-friendly header */}
+      <div className="bg-primary text-primary-foreground p-3 sm:p-4 sticky top-0 z-50">
+        <div className="container mx-auto flex items-center justify-between gap-2">
+          <h1 className="text-base sm:text-xl font-bold truncate">📋 এডমিন</h1>
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <span className="text-[10px] sm:text-sm opacity-80 hidden sm:inline">{userRole}</span>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/photo-card")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+              <Camera className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-1">ফটোকার্ড</span>
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => navigate("/")}>হোমপেজ</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+              🏠<span className="hidden sm:inline ml-1">হোম</span>
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-2 sm:p-4">
         <Tabs defaultValue="quick-post">
-          <TabsList className="w-full flex-wrap h-auto gap-1">
-            <TabsTrigger value="quick-post"><Newspaper className="w-4 h-4 mr-1" />কুইক পোস্ট</TabsTrigger>
-            <TabsTrigger value="posts"><Edit className="w-4 h-4 mr-1" />সকল পোস্ট ({posts.length})</TabsTrigger>
-            <TabsTrigger value="rss"><Rss className="w-4 h-4 mr-1" />RSS ম্যানেজার</TabsTrigger>
-            <TabsTrigger value="scraper"><Globe className="w-4 h-4 mr-1" />ওয়েব স্ক্র্যাপার</TabsTrigger>
-            <TabsTrigger value="categories"><Tag className="w-4 h-4 mr-1" />ক্যাটাগরি</TabsTrigger>
-            <TabsTrigger value="photocard"><Camera className="w-4 h-4 mr-1" />ফটোকার্ড</TabsTrigger>
+          <TabsList className="w-full flex-wrap h-auto gap-0.5 sm:gap-1 p-1">
+            <TabsTrigger value="quick-post" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Newspaper className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />পোস্ট
+            </TabsTrigger>
+            <TabsTrigger value="posts" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />সকল ({posts.length})
+            </TabsTrigger>
+            <TabsTrigger value="rss" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Rss className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />RSS
+            </TabsTrigger>
+            <TabsTrigger value="scraper" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Globe className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />স্ক্র্যাপার
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Tag className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />ক্যাটাগরি
+            </TabsTrigger>
           </TabsList>
 
           {/* Quick Post Tab */}
           <TabsContent value="quick-post">
             <Card>
-              <CardHeader><CardTitle>কুইক পোস্ট</CardTitle></CardHeader>
-              <CardContent>
-                <form onSubmit={handleQuickPost} className="space-y-4">
+              <CardHeader className="p-3 sm:p-6"><CardTitle className="text-base sm:text-lg">কুইক পোস্ট</CardTitle></CardHeader>
+              <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                <form onSubmit={handleQuickPost} className="space-y-3">
                   <div className="flex gap-2">
-                    <Input placeholder="নিউজ URL পেস্ট করুন (অটো ফেচ)" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} className="flex-1" />
-                    <Button type="button" onClick={handleFetchUrl} disabled={urlFetching || !quickUrl} variant="outline">
-                      <Link2 className={`w-4 h-4 mr-1 ${urlFetching ? "animate-spin" : ""}`} />ফেচ
+                    <Input placeholder="নিউজ URL পেস্ট করুন" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} className="flex-1 text-sm h-9" />
+                    <Button type="button" onClick={handleFetchUrl} disabled={urlFetching || !quickUrl} variant="outline" size="sm" className="h-9">
+                      <Link2 className={`w-3.5 h-3.5 ${urlFetching ? "animate-spin" : ""}`} />
+                      <span className="hidden sm:inline ml-1">ফেচ</span>
                     </Button>
                   </div>
-                  <Input placeholder="শিরোনাম *" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} required />
-                  <Textarea placeholder="কন্টেন্ট" value={quickContent} onChange={(e) => setQuickContent(e.target.value)} rows={6} />
-                  <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} />
-                  {quickImage && <img src={quickImage} alt="preview" className="h-24 object-cover rounded" />}
-                  <select className="w-full border rounded-md p-2 bg-background" value={quickCategory} onChange={(e) => setQuickCategory(e.target.value)}>
+                  {quickSummary && (
+                    <div className="bg-accent/20 border border-accent/30 rounded p-2 text-xs">
+                      <span className="font-medium text-accent-foreground">📝 অটো সারাংশ: </span>{quickSummary.substring(0, 200)}
+                    </div>
+                  )}
+                  <Input placeholder="শিরোনাম *" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} required className="text-sm h-9" />
+                  <Textarea placeholder="কন্টেন্ট" value={quickContent} onChange={(e) => setQuickContent(e.target.value)} rows={4} className="text-sm" />
+                  <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} className="text-sm h-9" />
+                  {quickImage && <img src={quickImage} alt="preview" className="h-16 object-cover rounded" />}
+                  <select className="w-full border rounded-md p-2 bg-background text-sm" value={quickCategory} onChange={(e) => setQuickCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন করুন</option>
                     {categories.filter((c) => !c.parent_id).map((c) => (
                       <optgroup key={c.id} label={c.name}>
@@ -399,9 +434,9 @@ const Admin = () => {
                       </optgroup>
                     ))}
                   </select>
-                  <Input placeholder="ট্যাগ (কমা দিয়ে আলাদা)" value={quickTags} onChange={(e) => setQuickTags(e.target.value)} />
-                  <Button type="submit" disabled={loading} className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />পোস্ট করুন
+                  <Input placeholder="ট্যাগ (কমা দিয়ে আলাদা)" value={quickTags} onChange={(e) => setQuickTags(e.target.value)} className="text-sm h-9" />
+                  <Button type="submit" disabled={loading} className="w-full h-9 text-sm">
+                    <Plus className="w-3.5 h-3.5 mr-1" />পোস্ট করুন
                   </Button>
                 </form>
               </CardContent>
@@ -411,16 +446,16 @@ const Admin = () => {
           {/* All Posts Tab */}
           <TabsContent value="posts">
             {editingPost && (
-              <Card className="mb-4 border-accent">
-                <CardHeader>
+              <Card className="mb-3 border-accent">
+                <CardHeader className="p-3">
                   <div className="flex justify-between items-center">
-                    <CardTitle>পোস্ট এডিট করুন</CardTitle>
-                    <Button variant="ghost" size="icon" onClick={() => setEditingPost(null)}><X className="h-4 w-4" /></Button>
+                    <CardTitle className="text-sm">পোস্ট এডিট</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={() => setEditingPost(null)} className="h-7 w-7"><X className="h-3.5 w-3.5" /></Button>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="শিরোনাম" />
-                  <select className="w-full border rounded-md p-2 bg-background" value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
+                <CardContent className="p-3 pt-0 space-y-2">
+                  <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="শিরোনাম" className="text-sm h-8" />
+                  <select className="w-full border rounded-md p-1.5 bg-background text-sm" value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন</option>
                     {categories.filter((c) => !c.parent_id).map((c) => (
                       <optgroup key={c.id} label={c.name}>
@@ -431,32 +466,95 @@ const Admin = () => {
                       </optgroup>
                     ))}
                   </select>
-                  <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={4} placeholder="কন্টেন্ট" />
-                  <Button onClick={saveEdit}><Save className="w-4 h-4 mr-2" />সেভ করুন</Button>
+                  <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} placeholder="কন্টেন্ট" className="text-sm" />
+                  <Button onClick={saveEdit} size="sm"><Save className="w-3.5 h-3.5 mr-1" />সেভ</Button>
                 </CardContent>
               </Card>
             )}
 
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <CardTitle>সকল পোস্ট ({filteredPosts.length})</CardTitle>
+              <CardHeader className="p-3 sm:p-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <CardTitle className="text-sm sm:text-base">সকল পোস্ট ({filteredPosts.length})</CardTitle>
+                  </div>
+                  {/* Source filter buttons */}
+                  <div className="flex gap-1 flex-wrap">
+                    {([
+                      { key: "all" as const, label: "সকল", count: posts.length },
+                      { key: "rss" as const, label: "📡 RSS", count: rssPostCount },
+                      { key: "scraper" as const, label: "🌐 স্ক্র্যাপার", count: scraperPostCount },
+                      { key: "manual" as const, label: "✍️ ম্যানুয়াল", count: manualPostCount },
+                    ]).map(f => (
+                      <button key={f.key} onClick={() => { setPostSourceFilter(f.key); setPostPage(0); }}
+                        className={`text-[10px] sm:text-xs px-2 py-1 rounded-full border transition-colors ${postSourceFilter === f.key ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"}`}>
+                        {f.label} ({f.count})
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Input type="month" className="w-40" value={postDateFilter} onChange={(e) => { setPostDateFilter(e.target.value); setPostPage(0); }} />
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
+                    <Input type="month" className="w-32 sm:w-40 h-8 text-xs" value={postDateFilter} onChange={(e) => { setPostDateFilter(e.target.value); setPostPage(0); }} />
+                    <div className="relative flex-1 min-w-[120px]">
+                      <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input placeholder="সার্চ..." className="pl-7 h-8 text-xs" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
                     </div>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
+              <CardContent className="p-2 sm:p-6 pt-0 overflow-x-auto">
+                {/* Mobile card view */}
+                <div className="sm:hidden space-y-2">
+                  {pagedPosts.map((post) => (
+                    <div key={post.id} className="border rounded-lg p-2.5 bg-card space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium leading-tight flex-1">{post.title}</p>
+                        {post.rss_feed_id ? <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">RSS</span>
+                          : post.author_id ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex-shrink-0">ম্যানুয়াল</span>
+                          : post.source_name ? <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0">স্ক্র্যাপ</span>
+                          : null}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <span>{post.source_name || "নিজস্ব"}</span>
+                        <span>•</span>
+                        <span>{post.published_at ? new Date(post.published_at).toLocaleDateString("bn-BD") : ""}</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <select className="text-[10px] border rounded p-0.5 bg-background w-20" value={post.category_id || ""} onChange={(e) => quickAssignCategory(post.id, e.target.value)}>
+                          <option value="">ক্যাটাগরি</option>
+                          {categories.map((c) => <option key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</option>)}
+                        </select>
+                        <Button size="icon" variant={post.is_featured ? "default" : "ghost"} onClick={() => toggleFeatured(post)} className="h-6 w-6">
+                          <Star className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant={post.is_highlighted ? "default" : "ghost"} onClick={() => toggleHighlighted(post)} className="h-6 w-6">
+                          <Highlighter className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => startEdit(post)} className="h-6 w-6">
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => shareToBlogger(post)} className="h-6 w-6" title="Blogger">
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => sharePost(post)} className="h-6 w-6">
+                          <Share2 className="h-3 w-3" />
+                        </Button>
+                        {userRole === "admin" && (
+                          <Button size="icon" variant="ghost" onClick={() => deletePost(post.id)} className="h-6 w-6 text-destructive">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table view */}
+                <Table className="hidden sm:table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>শিরোনাম</TableHead>
-                      <TableHead>ক্যাটাগরি</TableHead>
                       <TableHead>সোর্স</TableHead>
+                      <TableHead>ক্যাটাগরি</TableHead>
                       <TableHead>তারিখ</TableHead>
                       <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
@@ -464,31 +562,40 @@ const Admin = () => {
                   <TableBody>
                     {pagedPosts.map((post) => (
                       <TableRow key={post.id}>
-                        <TableCell className="max-w-[180px] truncate font-medium">{post.title}</TableCell>
+                        <TableCell className="max-w-[200px] truncate font-medium text-sm">{post.title}</TableCell>
+                        <TableCell className="text-xs">
+                          {post.rss_feed_id ? <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px]">📡 RSS</span>
+                            : post.author_id ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">✍️</span>
+                            : <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px]">🌐</span>}
+                          <span className="ml-1 text-muted-foreground">{post.source_name || "নিজস্ব"}</span>
+                        </TableCell>
                         <TableCell>
                           <select className="text-xs border rounded p-1 bg-background w-24" value={post.category_id || ""} onChange={(e) => quickAssignCategory(post.id, e.target.value)}>
                             <option value="">—</option>
-                            {categories.map((c) => (
-                              <option key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</option>
-                            ))}
+                            {categories.map((c) => <option key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</option>)}
                           </select>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{post.source_name || "নিজস্ব"}</TableCell>
                         <TableCell className="text-xs">{post.published_at ? new Date(post.published_at).toLocaleDateString("bn-BD") : ""}</TableCell>
                         <TableCell>
                           <div className="flex gap-0.5">
-                            <Button size="icon" variant={post.is_featured ? "default" : "ghost"} onClick={() => toggleFeatured(post)} title="ফিচার্ড">
-                              <Star className="h-3.5 w-3.5" />
+                            <Button size="icon" variant={post.is_featured ? "default" : "ghost"} onClick={() => toggleFeatured(post)} title="ফিচার্ড" className="h-7 w-7">
+                              <Star className="h-3 w-3" />
                             </Button>
-                            <Button size="icon" variant={post.is_highlighted ? "default" : "ghost"} onClick={() => toggleHighlighted(post)} title="হাইলাইট">
-                              <Highlighter className="h-3.5 w-3.5" />
+                            <Button size="icon" variant={post.is_highlighted ? "default" : "ghost"} onClick={() => toggleHighlighted(post)} title="হাইলাইট" className="h-7 w-7">
+                              <Highlighter className="h-3 w-3" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => startEdit(post)} title="এডিট">
-                              <Edit className="h-3.5 w-3.5" />
+                            <Button size="icon" variant="ghost" onClick={() => startEdit(post)} title="এডিট" className="h-7 w-7">
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => shareToBlogger(post)} title="Blogger" className="h-7 w-7">
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => sharePost(post)} title="শেয়ার" className="h-7 w-7">
+                              <Share2 className="h-3 w-3" />
                             </Button>
                             {userRole === "admin" && (
-                              <Button size="icon" variant="ghost" onClick={() => deletePost(post.id)} className="text-destructive">
-                                <Trash2 className="h-3.5 w-3.5" />
+                              <Button size="icon" variant="ghost" onClick={() => deletePost(post.id)} className="text-destructive h-7 w-7">
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             )}
                           </div>
@@ -498,10 +605,10 @@ const Admin = () => {
                   </TableBody>
                 </Table>
                 {filteredPosts.length > postsPerPage && (
-                  <div className="flex gap-2 mt-4 justify-center">
-                    <Button variant="outline" size="sm" disabled={postPage === 0} onClick={() => setPostPage((p) => p - 1)}>আগের</Button>
-                    <span className="text-sm text-muted-foreground self-center">{postPage + 1} / {Math.ceil(filteredPosts.length / postsPerPage)}</span>
-                    <Button variant="outline" size="sm" disabled={(postPage + 1) * postsPerPage >= filteredPosts.length} onClick={() => setPostPage((p) => p + 1)}>পরের</Button>
+                  <div className="flex gap-2 mt-3 justify-center">
+                    <Button variant="outline" size="sm" disabled={postPage === 0} onClick={() => setPostPage((p) => p - 1)} className="h-7 text-xs">আগের</Button>
+                    <span className="text-xs text-muted-foreground self-center">{postPage + 1}/{Math.ceil(filteredPosts.length / postsPerPage)}</span>
+                    <Button variant="outline" size="sm" disabled={(postPage + 1) * postsPerPage >= filteredPosts.length} onClick={() => setPostPage((p) => p + 1)} className="h-7 text-xs">পরের</Button>
                   </div>
                 )}
               </CardContent>
@@ -510,76 +617,72 @@ const Admin = () => {
 
           {/* RSS Tab */}
           <TabsContent value="rss">
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Card>
-                <CardHeader>
+                <CardHeader className="p-3 sm:p-6">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <CardTitle>RSS ফিড ম্যানেজার ({feeds.length})</CardTitle>
+                    <CardTitle className="text-sm sm:text-base">RSS ম্যানেজার ({feeds.length})</CardTitle>
                     <div className="flex items-center gap-2">
-                      {fetchProgress && <span className="text-xs text-muted-foreground">{fetchProgress}</span>}
-                      <Button onClick={handleFetchRSS} disabled={loading}>
-                        <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />এখনই ফেচ করুন
+                      {fetchProgress && <span className="text-[10px] text-muted-foreground">{fetchProgress}</span>}
+                      <Button onClick={handleFetchRSS} disabled={loading} size="sm" className="h-8 text-xs">
+                        <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ফেচ
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleAddFeed} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                    <Input placeholder="RSS URL *" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required />
-                    <Input placeholder="নাম *" value={feedName} onChange={(e) => setFeedName(e.target.value)} required />
-                    
-                    {/* Division dropdown */}
-                    <select className="border rounded-md p-2 bg-background" value={feedDivision} onChange={(e) => { setFeedDivision(e.target.value); setFeedDistrict(""); setFeedUpazila(""); }}>
-                      <option value="">বিভাগ নির্বাচন করুন</option>
-                      <option value="barisal">বরিশাল</option>
-                      <option value="dhaka">ঢাকা</option>
-                      <option value="chittagong">চট্টগ্রাম</option>
-                      <option value="sylhet">সিলেট</option>
-                      <option value="rajshahi">রাজশাহী</option>
-                      <option value="rangpur">রংপুর</option>
-                      <option value="khulna">খুলনা</option>
-                      <option value="mymensingh">ময়মনসিংহ</option>
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  <form onSubmit={handleAddFeed} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                    <Input placeholder="RSS URL *" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required className="text-sm h-8" />
+                    <Input placeholder="নাম *" value={feedName} onChange={(e) => setFeedName(e.target.value)} required className="text-sm h-8" />
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={feedDivision} onChange={(e) => { setFeedDivision(e.target.value); setFeedDistrict(""); setFeedUpazila(""); }}>
+                      <option value="">বিভাগ</option>
+                      {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                        <option key={k} value={k}>{v}</option>
+                      )}
                     </select>
-
-                    {/* District dropdown */}
-                    <select className="border rounded-md p-2 bg-background" value={feedDistrict} onChange={(e) => { setFeedDistrict(e.target.value); setFeedUpazila(""); }} disabled={!feedDivision}>
-                      <option value="">জেলা নির্বাচন করুন</option>
-                      {currentDistricts.map((d) => (
-                        <option key={d.name} value={d.name}>{d.name}</option>
-                      ))}
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={feedDistrict} onChange={(e) => { setFeedDistrict(e.target.value); setFeedUpazila(""); }} disabled={!feedDivision}>
+                      <option value="">জেলা</option>
+                      {currentDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
                     </select>
-
-                    {/* Upazila dropdown */}
-                    <select className="border rounded-md p-2 bg-background" value={feedUpazila} onChange={(e) => setFeedUpazila(e.target.value)} disabled={!feedDistrict}>
-                      <option value="">উপজেলা নির্বাচন করুন</option>
-                      {currentUpazilas.map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={feedUpazila} onChange={(e) => setFeedUpazila(e.target.value)} disabled={!feedDistrict}>
+                      <option value="">উপজেলা</option>
+                      {currentUpazilas.map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
-
-                    {/* Category dropdown */}
-                    <select className="border rounded-md p-2 bg-background" value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)}>
-                      <option value="general">সাধারণ</option>
-                      <option value="national">জাতীয়</option>
-                      <option value="international">আন্তর্জাতিক</option>
-                      <option value="divisional">বিভাগীয়</option>
-                      <option value="tv">টিভি</option>
-                      <option value="sports">খেলা</option>
-                      <option value="entertainment">বিনোদন</option>
-                      <option value="education">শিক্ষা</option>
-                      <option value="technology">প্রযুক্তি</option>
-                      <option value="health">স্বাস্থ্য</option>
-                      <option value="economy">অর্থনীতি</option>
-                      <option value="lifestyle">লাইফস্টাইল</option>
-                      <option value="politics">রাজনীতি</option>
-                      <option value="world">বিশ্ব</option>
-                      <option value="religion">ধর্ম</option>
-                      <option value="travel">ভ্রমণ</option>
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)}>
+                      {[
+                        ["general", "সাধারণ"], ["national", "জাতীয়"], ["international", "আন্তর্জাতিক"], ["divisional", "বিভাগীয়"],
+                        ["tv", "টিভি"], ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"],
+                        ["technology", "প্রযুক্তি"], ["health", "স্বাস্থ্য"], ["economy", "অর্থনীতি"], ["lifestyle", "লাইফস্টাইল"],
+                        ["politics", "রাজনীতি"], ["world", "বিশ্ব"], ["religion", "ধর্ম"], ["travel", "ভ্রমণ"],
+                      ].map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                    <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />ফিড যুক্ত করুন</Button>
+                    <Button type="submit" className="sm:col-span-2 h-8 text-sm"><Plus className="w-3.5 h-3.5 mr-1" />ফিড যুক্ত</Button>
                   </form>
 
-                  <Table>
+                  {/* Mobile feed list */}
+                  <div className="sm:hidden space-y-2">
+                    {feeds.map((feed) => (
+                      <div key={feed.id} className="border rounded p-2 bg-card text-xs space-y-1">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium">{feed.name}</p>
+                            <p className="text-muted-foreground truncate">{feed.url}</p>
+                          </div>
+                          <Button size="icon" variant="ghost" onClick={() => deleteFeed(feed.id)} className="text-destructive h-6 w-6 flex-shrink-0">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-2 text-[10px] text-muted-foreground">
+                          <span>{feed.division || "-"}</span>
+                          <span>{feed.category || "-"}</span>
+                          <span>{feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString("bn-BD") : "—"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <Table className="hidden sm:table">
                     <TableHeader>
                       <TableRow>
                         <TableHead>নাম</TableHead>
@@ -597,10 +700,10 @@ const Admin = () => {
                           <TableCell className="max-w-[150px] truncate text-xs">{feed.url}</TableCell>
                           <TableCell className="text-xs">{feed.division || "-"}</TableCell>
                           <TableCell className="text-xs">{feed.category || "-"}</TableCell>
-                          <TableCell className="text-xs">{feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
+                          <TableCell className="text-xs">{feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString("bn-BD") : "—"}</TableCell>
                           <TableCell>
-                            <Button size="icon" variant="ghost" onClick={() => deleteFeed(feed.id)} className="text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" />
+                            <Button size="icon" variant="ghost" onClick={() => deleteFeed(feed.id)} className="text-destructive h-7 w-7">
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -615,84 +718,86 @@ const Admin = () => {
           {/* Web Scraper Tab */}
           <TabsContent value="scraper">
             <Card>
-              <CardHeader>
+              <CardHeader className="p-3 sm:p-6">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle>🌐 ওয়েব স্ক্র্যাপার ({scrapeSources.length} সোর্স)</CardTitle>
-                  <Button onClick={handleManualScrape} disabled={loading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />এখনই স্ক্র্যাপ করুন
+                  <CardTitle className="text-sm sm:text-base">🌐 স্ক্র্যাপার ({scrapeSources.length})</CardTitle>
+                  <Button onClick={handleManualScrape} disabled={loading} size="sm" className="h-8 text-xs">
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />স্ক্র্যাপ
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground">RSS ছাড়া নিউজ সাইট থেকে স্বয়ংক্রিয়ভাবে নিউজ ফেচ করুন (প্রতি ৫ মিনিট পর পর)</p>
               </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddScrapeSource} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                  <Input placeholder="সাইট URL * (যেমন: https://example.com)" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} required />
-                  <Input placeholder="সোর্স নাম *" value={scrapeName} onChange={(e) => setScrapeName(e.target.value)} required />
-                  
-                  <select className="border rounded-md p-2 bg-background" value={scrapeDivision} onChange={(e) => { setScrapeDivision(e.target.value); setScrapeDistrict(""); setScrapeUpazila(""); }}>
-                    <option value="">বিভাগ নির্বাচন করুন</option>
-                    <option value="barisal">বরিশাল</option>
-                    <option value="dhaka">ঢাকা</option>
-                    <option value="chittagong">চট্টগ্রাম</option>
-                    <option value="sylhet">সিলেট</option>
-                    <option value="rajshahi">রাজশাহী</option>
-                    <option value="rangpur">রংপুর</option>
-                    <option value="khulna">খুলনা</option>
-                    <option value="mymensingh">ময়মনসিংহ</option>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <form onSubmit={handleAddScrapeSource} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                  <Input placeholder="সাইট URL *" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} required className="text-sm h-8" />
+                  <Input placeholder="সোর্স নাম *" value={scrapeName} onChange={(e) => setScrapeName(e.target.value)} required className="text-sm h-8" />
+                  <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeDivision} onChange={(e) => { setScrapeDivision(e.target.value); setScrapeDistrict(""); setScrapeUpazila(""); }}>
+                    <option value="">বিভাগ</option>
+                    {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                      <option key={k} value={k}>{v}</option>
+                    )}
                   </select>
-
-                  <select className="border rounded-md p-2 bg-background" value={scrapeDistrict} onChange={(e) => { setScrapeDistrict(e.target.value); setScrapeUpazila(""); }} disabled={!scrapeDivision}>
-                    <option value="">জেলা নির্বাচন করুন</option>
+                  <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeDistrict} onChange={(e) => { setScrapeDistrict(e.target.value); setScrapeUpazila(""); }} disabled={!scrapeDivision}>
+                    <option value="">জেলা</option>
                     {scrapeDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
                   </select>
-
-                  <select className="border rounded-md p-2 bg-background" value={scrapeUpazila} onChange={(e) => setScrapeUpazila(e.target.value)} disabled={!scrapeDistrict}>
-                    <option value="">উপজেলা নির্বাচন করুন</option>
+                  <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeUpazila} onChange={(e) => setScrapeUpazila(e.target.value)} disabled={!scrapeDistrict}>
+                    <option value="">উপজেলা</option>
                     {scrapeUpazilasList.map((u) => <option key={u} value={u}>{u}</option>)}
                   </select>
-
-                  <select className="border rounded-md p-2 bg-background" value={scrapeCategory} onChange={(e) => setScrapeCategory(e.target.value)}>
-                    <option value="general">সাধারণ</option>
-                    <option value="national">জাতীয়</option>
-                    <option value="international">আন্তর্জাতিক</option>
-                    <option value="divisional">বিভাগীয়</option>
-                    <option value="sports">খেলা</option>
-                    <option value="entertainment">বিনোদন</option>
-                    <option value="education">শিক্ষা</option>
-                    <option value="technology">প্রযুক্তি</option>
-                    <option value="economy">অর্থনীতি</option>
+                  <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeCategory} onChange={(e) => setScrapeCategory(e.target.value)}>
+                    {[
+                      ["general", "সাধারণ"], ["national", "জাতীয়"], ["international", "আন্তর্জাতিক"], ["divisional", "বিভাগীয়"],
+                      ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"], ["technology", "প্রযুক্তি"], ["economy", "অর্থনীতি"],
+                    ].map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-
-                  <select className="border rounded-md p-2 bg-background" value={scrapeInterval} onChange={(e) => setScrapeInterval(e.target.value)}>
-                    <option value="5">প্রতি ৫ মিনিট</option>
-                    <option value="15">প্রতি ১৫ মিনিট</option>
-                    <option value="30">প্রতি ৩০ মিনিট</option>
-                    <option value="60">প্রতি ১ ঘণ্টা</option>
-                    <option value="360">প্রতি ৬ ঘণ্টা</option>
+                  <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeInterval} onChange={(e) => setScrapeInterval(e.target.value)}>
+                    <option value="5">৫ মিনিট</option>
+                    <option value="15">১৫ মিনিট</option>
+                    <option value="30">৩০ মিনিট</option>
+                    <option value="60">১ ঘণ্টা</option>
                   </select>
-
-                  {/* CSS Selector Config */}
-                  <div className="md:col-span-2 border rounded-md p-3 bg-muted/30 space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">🎯 CSS সিলেক্টর কনফিগারেশন (ঐচ্ছিক)</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <Input placeholder="আর্টিকেল সিলেক্টর (যেমন: article, .post-item)" value={scrapeArticleSelector} onChange={(e) => setScrapeArticleSelector(e.target.value)} />
-                      <Input placeholder="টাইটেল সিলেক্টর (যেমন: h2 a, .title)" value={scrapeTitleSelector} onChange={(e) => setScrapeTitleSelector(e.target.value)} />
-                      <Input placeholder="ইমেজ সিলেক্টর (যেমন: img.featured, .thumb img)" value={scrapeImageSelector} onChange={(e) => setScrapeImageSelector(e.target.value)} />
-                      <Input placeholder="লিংক সিলেক্টর (যেমন: a.read-more, h2 a)" value={scrapeLinkSelector} onChange={(e) => setScrapeLinkSelector(e.target.value)} />
+                  <div className="sm:col-span-2 border rounded-md p-2 bg-muted/30 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">🎯 CSS সিলেক্টর (ঐচ্ছিক)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <Input placeholder="article সিলেক্টর" value={scrapeArticleSelector} onChange={(e) => setScrapeArticleSelector(e.target.value)} className="text-xs h-7" />
+                      <Input placeholder="title সিলেক্টর" value={scrapeTitleSelector} onChange={(e) => setScrapeTitleSelector(e.target.value)} className="text-xs h-7" />
+                      <Input placeholder="image সিলেক্টর" value={scrapeImageSelector} onChange={(e) => setScrapeImageSelector(e.target.value)} className="text-xs h-7" />
+                      <Input placeholder="link সিলেক্টর" value={scrapeLinkSelector} onChange={(e) => setScrapeLinkSelector(e.target.value)} className="text-xs h-7" />
                     </div>
                   </div>
-
-                  <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />সোর্স যুক্ত করুন</Button>
+                  <Button type="submit" className="sm:col-span-2 h-8 text-sm"><Plus className="w-3.5 h-3.5 mr-1" />সোর্স যুক্ত</Button>
                 </form>
 
-                <Table>
+                {/* Mobile scrape source list */}
+                <div className="sm:hidden space-y-2">
+                  {scrapeSources.map((src: any) => (
+                    <div key={src.id} className="border rounded p-2 bg-card text-xs space-y-1">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium">{src.name}</p>
+                          <p className="text-muted-foreground truncate">{src.url}</p>
+                        </div>
+                        <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive h-6 w-6 flex-shrink-0">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 text-[10px]">
+                        <span>{src.division || "-"}</span>
+                        <span>{src.scrape_interval_minutes}মি</span>
+                        {src.last_error ? <span className="text-destructive">❌</span> : <span className="text-green-600">✅</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <Table className="hidden sm:table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>নাম</TableHead>
                       <TableHead>URL</TableHead>
                       <TableHead>বিভাগ</TableHead>
                       <TableHead>ইন্টারভাল</TableHead>
-                      <TableHead>শেষ স্ক্র্যাপ</TableHead>
                       <TableHead>স্ট্যাটাস</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
@@ -704,16 +809,12 @@ const Admin = () => {
                         <TableCell className="max-w-[150px] truncate text-xs">{src.url}</TableCell>
                         <TableCell className="text-xs">{src.division || "-"}</TableCell>
                         <TableCell className="text-xs">{src.scrape_interval_minutes}মি</TableCell>
-                        <TableCell className="text-xs">{src.last_scraped_at ? new Date(src.last_scraped_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
                         <TableCell className="text-xs">
-                          {src.last_error ? <span className="text-destructive" title={src.last_error}>❌ ত্রুটি</span> : <span className="text-green-600">✅ সক্রিয়</span>}
-                          {src.selector_config && Object.keys(src.selector_config).filter(k => src.selector_config[k]).length > 0 && (
-                            <span className="ml-1 text-accent" title={JSON.stringify(src.selector_config)}>🎯</span>
-                          )}
+                          {src.last_error ? <span className="text-destructive" title={src.last_error}>❌</span> : <span className="text-green-600">✅</span>}
                         </TableCell>
                         <TableCell>
-                          <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive">
-                            <Trash2 className="h-3.5 w-3.5" />
+                          <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive h-7 w-7">
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -727,59 +828,21 @@ const Admin = () => {
           {/* Categories Tab */}
           <TabsContent value="categories">
             <Card>
-              <CardHeader><CardTitle>ক্যাটাগরি ম্যানেজমেন্ট</CardTitle></CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddCategory} className="flex gap-3 mb-6 flex-wrap">
-                  <Input placeholder="ক্যাটাগরি নাম" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required className="flex-1 min-w-[150px]" />
-                  <Input placeholder="স্লাগ (english)" value={newCatSlug} onChange={(e) => setNewCatSlug(e.target.value)} required className="flex-1 min-w-[150px]" />
-                  <select className="border rounded-md p-2 bg-background min-w-[150px]" value={newCatParent} onChange={(e) => setNewCatParent(e.target.value)}>
-                    <option value="">প্যারেন্ট (ঐচ্ছিক)</option>
-                    {categories.filter((c) => !c.parent_id).map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+              <CardHeader className="p-3 sm:p-6"><CardTitle className="text-sm sm:text-base">ক্যাটাগরি ম্যানেজমেন্ট</CardTitle></CardHeader>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <form onSubmit={handleAddCategory} className="flex gap-2 mb-4 flex-wrap">
+                  <Input placeholder="নাম" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required className="flex-1 min-w-[100px] text-sm h-8" />
+                  <Input placeholder="slug" value={newCatSlug} onChange={(e) => setNewCatSlug(e.target.value)} required className="flex-1 min-w-[80px] text-sm h-8" />
+                  <select className="border rounded-md p-1.5 bg-background text-sm min-w-[100px]" value={newCatParent} onChange={(e) => setNewCatParent(e.target.value)}>
+                    <option value="">প্যারেন্ট</option>
+                    {categories.filter((c) => !c.parent_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                  <Button type="submit"><Plus className="w-4 h-4" /></Button>
+                  <Button type="submit" size="sm" className="h-8"><Plus className="w-3.5 h-3.5" /></Button>
                 </form>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                   {categories.map((cat) => (
-                    <div key={cat.id} className={`p-2 rounded border text-sm ${cat.parent_id ? "ml-4 bg-muted/50" : "font-medium"}`}>
-                      {cat.name} <span className="text-xs text-muted-foreground">({cat.slug})</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* PhotoCard Tab */}
-          <TabsContent value="photocard">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>📸 ফটোকার্ড জেনারেটর</CardTitle>
-                  <Button onClick={() => navigate("/photo-card")} variant="outline">
-                    <Camera className="w-4 h-4 mr-2" />ফুল পেজে যান
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm mb-4">
-                  ফটোকার্ড জেনারেটরে ৫টি প্রিসেট টেমপ্লেট (নিউজ, কোটেশন, ইভেন্ট, মিনিমাল, ব্রেকিং), কাস্টম ফ্রেম/লোগো আপলোড এবং QR কোড যুক্ত করার অপশন রয়েছে।
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { icon: "📰", label: "নিউজ কার্ড", desc: "সংবাদ কার্ড তৈরি" },
-                    { icon: "❝", label: "কোটেশন কার্ড", desc: "উদ্ধৃতি কার্ড" },
-                    { icon: "📅", label: "ইভেন্ট কার্ড", desc: "ইভেন্ট পোস্টার" },
-                    { icon: "✨", label: "মিনিমাল", desc: "সিম্পল ডিজাইন" },
-                    { icon: "🔴", label: "ব্রেকিং নিউজ", desc: "জরুরি সংবাদ" },
-                    { icon: "🖼️", label: "কাস্টম ফ্রেম", desc: "নিজস্ব ফ্রেম" },
-                  ].map((item) => (
-                    <div key={item.label} onClick={() => navigate("/photo-card")}
-                      className="p-4 rounded-lg border bg-card hover:bg-muted cursor-pointer text-center transition-colors">
-                      <div className="text-2xl mb-1">{item.icon}</div>
-                      <div className="text-sm font-medium">{item.label}</div>
-                      <div className="text-xs text-muted-foreground">{item.desc}</div>
+                    <div key={cat.id} className={`p-1.5 rounded border text-xs ${cat.parent_id ? "ml-3 bg-muted/50" : "font-medium"}`}>
+                      {cat.name} <span className="text-[10px] text-muted-foreground">({cat.slug})</span>
                     </div>
                   ))}
                 </div>
