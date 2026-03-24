@@ -51,6 +51,10 @@ const Admin = () => {
   const [scrapeUpazila, setScrapeUpazila] = useState("");
   const [scrapeCategory, setScrapeCategory] = useState("general");
   const [scrapeInterval, setScrapeInterval] = useState("30");
+  const [scrapeArticleSelector, setScrapeArticleSelector] = useState("");
+  const [scrapeTitleSelector, setScrapeTitleSelector] = useState("");
+  const [scrapeImageSelector, setScrapeImageSelector] = useState("");
+  const [scrapeLinkSelector, setScrapeLinkSelector] = useState("");
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
   const [newCatParent, setNewCatParent] = useState("");
@@ -64,6 +68,7 @@ const Admin = () => {
   // Post search/filter
   const [postSearch, setPostSearch] = useState("");
   const [postPage, setPostPage] = useState(0);
+  const [postDateFilter, setPostDateFilter] = useState("");
   const postsPerPage = 50;
 
   // RSS fetch progress
@@ -207,12 +212,19 @@ const Admin = () => {
       url: scrapeUrl, name: scrapeName, division: scrapeDivision || null,
       district: scrapeDistrict || null, upazila: scrapeUpazila || null,
       category: scrapeCategory, scrape_interval_minutes: parseInt(scrapeInterval) || 30,
+      selector_config: (scrapeArticleSelector || scrapeTitleSelector || scrapeImageSelector || scrapeLinkSelector) ? {
+        article: scrapeArticleSelector || null,
+        title: scrapeTitleSelector || null,
+        image: scrapeImageSelector || null,
+        link: scrapeLinkSelector || null,
+      } : {},
     } as any);
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "স্ক্র্যাপ সোর্স যুক্ত হয়েছে" });
       setScrapeUrl(""); setScrapeName(""); setScrapeDivision(""); setScrapeDistrict(""); setScrapeUpazila("");
+      setScrapeArticleSelector(""); setScrapeTitleSelector(""); setScrapeImageSelector(""); setScrapeLinkSelector("");
       fetchData();
     }
   };
@@ -275,10 +287,12 @@ const Admin = () => {
     fetchData();
   };
 
-  const filteredPosts = posts.filter((p) =>
-    !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
-    (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase())
-  );
+  const filteredPosts = posts.filter((p) => {
+    const matchSearch = !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
+      (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase());
+    const matchDate = !postDateFilter || (p.published_at && p.published_at.startsWith(postDateFilter));
+    return matchSearch && matchDate;
+  });
   const pagedPosts = filteredPosts.slice(postPage * postsPerPage, (postPage + 1) * postsPerPage);
 
   // District/Upazila data for RSS form
@@ -427,9 +441,12 @@ const Admin = () => {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <CardTitle>সকল পোস্ট ({filteredPosts.length})</CardTitle>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input type="month" className="w-40" value={postDateFilter} onChange={(e) => { setPostDateFilter(e.target.value); setPostPage(0); }} />
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -654,6 +671,17 @@ const Admin = () => {
                     <option value="360">প্রতি ৬ ঘণ্টা</option>
                   </select>
 
+                  {/* CSS Selector Config */}
+                  <div className="md:col-span-2 border rounded-md p-3 bg-muted/30 space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">🎯 CSS সিলেক্টর কনফিগারেশন (ঐচ্ছিক)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input placeholder="আর্টিকেল সিলেক্টর (যেমন: article, .post-item)" value={scrapeArticleSelector} onChange={(e) => setScrapeArticleSelector(e.target.value)} />
+                      <Input placeholder="টাইটেল সিলেক্টর (যেমন: h2 a, .title)" value={scrapeTitleSelector} onChange={(e) => setScrapeTitleSelector(e.target.value)} />
+                      <Input placeholder="ইমেজ সিলেক্টর (যেমন: img.featured, .thumb img)" value={scrapeImageSelector} onChange={(e) => setScrapeImageSelector(e.target.value)} />
+                      <Input placeholder="লিংক সিলেক্টর (যেমন: a.read-more, h2 a)" value={scrapeLinkSelector} onChange={(e) => setScrapeLinkSelector(e.target.value)} />
+                    </div>
+                  </div>
+
                   <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />সোর্স যুক্ত করুন</Button>
                 </form>
 
@@ -679,6 +707,9 @@ const Admin = () => {
                         <TableCell className="text-xs">{src.last_scraped_at ? new Date(src.last_scraped_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
                         <TableCell className="text-xs">
                           {src.last_error ? <span className="text-destructive" title={src.last_error}>❌ ত্রুটি</span> : <span className="text-green-600">✅ সক্রিয়</span>}
+                          {src.selector_config && Object.keys(src.selector_config).filter(k => src.selector_config[k]).length > 0 && (
+                            <span className="ml-1 text-accent" title={JSON.stringify(src.selector_config)}>🎯</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive">

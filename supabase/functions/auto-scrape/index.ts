@@ -25,16 +25,30 @@ function extractText(html: string): string {
     .trim();
 }
 
-function extractLinks(html: string, baseUrl: string): { title: string; url: string; image: string | null }[] {
+function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { title: string; url: string; image: string | null }[] {
   const links: { title: string; url: string; image: string | null }[] = [];
   const seen = new Set<string>();
 
-  // Find article links with headlines
+  // Custom selectors from config
+  const articleSel = selectorConfig?.article;
+  const titleSel = selectorConfig?.title;
+  const linkSel = selectorConfig?.link;
+  const imgSel = selectorConfig?.image;
+
+  // Build patterns based on selectors or use defaults
   const patterns = [
     /<a[^>]+href=["']([^"'#]+)["'][^>]*>[\s\S]*?<(?:h[1-6]|span|div)[^>]*>([\s\S]*?)<\/(?:h[1-6]|span|div)>[\s\S]*?<\/a>/gi,
     /<h[1-6][^>]*>\s*<a[^>]+href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h[1-6]>/gi,
     /<a[^>]+href=["']([^"']+)["'][^>]*title=["']([^"']+)["']/gi,
   ];
+
+  // If custom article/link selectors provided, also try class-based patterns
+  if (articleSel || linkSel) {
+    const classMatch = (articleSel || linkSel || "").replace(/^\./, "");
+    if (classMatch) {
+      patterns.push(new RegExp(`<[^>]+class="[^"]*${classMatch}[^"]*"[^>]*>[\\s\\S]*?<a[^>]+href=["']([^"'#]+)["'][^>]*>([\\s\\S]*?)<\\/a>`, "gi"));
+    }
+  }
 
   for (const pattern of patterns) {
     let match;
@@ -43,7 +57,6 @@ function extractLinks(html: string, baseUrl: string): { title: string; url: stri
       const title = extractText(match[2]).trim();
       if (!title || title.length < 10) continue;
 
-      // Resolve relative URLs
       try {
         if (url.startsWith("/")) url = new URL(url, baseUrl).href;
         else if (!url.startsWith("http")) continue;
@@ -52,13 +65,24 @@ function extractLinks(html: string, baseUrl: string): { title: string; url: stri
       if (seen.has(url)) continue;
       seen.add(url);
 
-      // Find nearby image
-      const nearbyImg = html.substring(
+      // Find nearby image - use custom selector or default
+      const searchArea = html.substring(
         Math.max(0, (match.index || 0) - 500),
         (match.index || 0) + match[0].length + 500
-      ).match(/<img[^>]+src=["']([^"']+)["']/i);
-
-      let image: string | null = nearbyImg?.[1] || null;
+      );
+      
+      let image: string | null = null;
+      if (imgSel) {
+        const imgClass = imgSel.replace(/^\./, "").replace(/\s+.*/, "");
+        const customImgMatch = searchArea.match(new RegExp(`<img[^>]+class="[^"]*${imgClass}[^"]*"[^>]+src=["']([^"']+)["']`, "i"))
+          || searchArea.match(new RegExp(`<img[^>]+src=["']([^"']+)["'][^>]+class="[^"]*${imgClass}[^"]*"`, "i"));
+        image = customImgMatch?.[1] || null;
+      }
+      if (!image) {
+        const nearbyImg = searchArea.match(/<img[^>]+src=["']([^"']+)["']/i);
+        image = nearbyImg?.[1] || null;
+      }
+      
       if (image && image.startsWith("/")) {
         try { image = new URL(image, baseUrl).href; } catch { image = null; }
       }
@@ -172,7 +196,7 @@ Deno.serve(async (req) => {
 
         const html = await response.text();
         const baseUrl = new URL(source.url).origin;
-        const articles = extractLinks(html, baseUrl);
+        const articles = extractLinks(html, baseUrl, source.selector_config);
 
         if (articles.length === 0) {
           await supabase.from("scrape_sources").update({
