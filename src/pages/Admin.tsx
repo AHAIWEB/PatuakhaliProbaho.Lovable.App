@@ -78,14 +78,16 @@ const Admin = () => {
   }, [user, userRole, authLoading]);
 
   const fetchData = async () => {
-    const [postsRes, feedsRes, catsRes] = await Promise.all([
+    const [postsRes, feedsRes, catsRes, scrapeRes] = await Promise.all([
       supabase.from("posts").select("*").order("published_at", { ascending: false }).limit(200),
       supabase.from("rss_feeds").select("*").order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("sort_order"),
+      supabase.from("scrape_sources").select("*").order("created_at", { ascending: false }),
     ]);
     if (postsRes.data) setPosts(postsRes.data);
     if (feedsRes.data) setFeeds(feedsRes.data);
     if (catsRes.data) setCategories(catsRes.data);
+    if (scrapeRes.data) setScrapeSources(scrapeRes.data);
   };
 
   const handleFetchUrl = async () => {
