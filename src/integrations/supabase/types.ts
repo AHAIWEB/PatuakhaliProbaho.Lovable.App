@@ -85,6 +85,7 @@ export type Database = {
           category_id: string | null
           content: string | null
           created_at: string | null
+          district: string | null
           division: string | null
           excerpt: string | null
           highlight_expires_at: string | null
@@ -95,11 +96,13 @@ export type Database = {
           published_at: string | null
           rss_feed_id: string | null
           slug: string
+          source_category: string | null
           source_name: string | null
           source_url: string | null
           status: string | null
           tags: string[] | null
           title: string
+          upazila: string | null
           updated_at: string | null
           views: number | null
         }
@@ -108,6 +111,7 @@ export type Database = {
           category_id?: string | null
           content?: string | null
           created_at?: string | null
+          district?: string | null
           division?: string | null
           excerpt?: string | null
           highlight_expires_at?: string | null
@@ -118,11 +122,13 @@ export type Database = {
           published_at?: string | null
           rss_feed_id?: string | null
           slug: string
+          source_category?: string | null
           source_name?: string | null
           source_url?: string | null
           status?: string | null
           tags?: string[] | null
           title: string
+          upazila?: string | null
           updated_at?: string | null
           views?: number | null
         }
@@ -131,6 +137,7 @@ export type Database = {
           category_id?: string | null
           content?: string | null
           created_at?: string | null
+          district?: string | null
           division?: string | null
           excerpt?: string | null
           highlight_expires_at?: string | null
@@ -141,11 +148,13 @@ export type Database = {
           published_at?: string | null
           rss_feed_id?: string | null
           slug?: string
+          source_category?: string | null
           source_name?: string | null
           source_url?: string | null
           status?: string | null
           tags?: string[] | null
           title?: string
+          upazila?: string | null
           updated_at?: string | null
           views?: number | null
         }
@@ -200,31 +209,40 @@ export type Database = {
         Row: {
           category: string | null
           created_at: string | null
+          district: string | null
           division: string | null
           id: string
           is_active: boolean | null
           last_fetched_at: string | null
           name: string
+          source_category: string | null
+          upazila: string | null
           url: string
         }
         Insert: {
           category?: string | null
           created_at?: string | null
+          district?: string | null
           division?: string | null
           id?: string
           is_active?: boolean | null
           last_fetched_at?: string | null
           name: string
+          source_category?: string | null
+          upazila?: string | null
           url: string
         }
         Update: {
           category?: string | null
           created_at?: string | null
+          district?: string | null
           division?: string | null
           id?: string
           is_active?: boolean | null
           last_fetched_at?: string | null
           name?: string
+          source_category?: string | null
+          upazila?: string | null
           url?: string
         }
         Relationships: []
