@@ -5,9 +5,9 @@ interface AdSpaceProps {
 
 const AdSpace = ({ size, className = "" }: AdSpaceProps) => {
   const sizeClasses = {
-    banner: "h-20",
-    sidebar: "h-48",
-    leaderboard: "h-24",
+    banner: "h-16 sm:h-20",
+    sidebar: "h-32 sm:h-48",
+    leaderboard: "h-16 sm:h-24",
   };
 
   return (
