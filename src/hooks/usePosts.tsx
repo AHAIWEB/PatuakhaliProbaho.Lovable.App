@@ -52,19 +52,21 @@ export const usePostsByDivision = (division: string, limit = 10) =>
     },
   });
 
-export const usePostsByCategory = (category: string, limit = 10) =>
+export const usePostsByCategory = (categoryId: string, limit = 10) =>
   useQuery({
-    queryKey: ["posts", "category", category, limit],
+    queryKey: ["posts", "category", categoryId, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("posts")
         .select("*")
+        .eq("category_id", categoryId)
         .eq("status", "published")
         .order("published_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
       return data;
     },
+    enabled: !!categoryId,
   });
 
 export const useLatestPosts = (limit = 20) =>
