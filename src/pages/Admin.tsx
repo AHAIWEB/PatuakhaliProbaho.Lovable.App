@@ -353,6 +353,7 @@ const Admin = () => {
             <TabsTrigger value="quick-post"><Newspaper className="w-4 h-4 mr-1" />কুইক পোস্ট</TabsTrigger>
             <TabsTrigger value="posts"><Edit className="w-4 h-4 mr-1" />সকল পোস্ট ({posts.length})</TabsTrigger>
             <TabsTrigger value="rss"><Rss className="w-4 h-4 mr-1" />RSS ম্যানেজার</TabsTrigger>
+            <TabsTrigger value="scraper"><Globe className="w-4 h-4 mr-1" />ওয়েব স্ক্র্যাপার</TabsTrigger>
             <TabsTrigger value="categories"><Tag className="w-4 h-4 mr-1" />ক্যাটাগরি</TabsTrigger>
             <TabsTrigger value="photocard"><Camera className="w-4 h-4 mr-1" />ফটোকার্ড</TabsTrigger>
           </TabsList>
