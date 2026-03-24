@@ -27,7 +27,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/admin" element={<Admin />} />
-            <Route path="/photocard" element={<PhotoCard />} />
+            <Route path="/photo-card" element={<PhotoCard />} />
             <Route path="/category/:slug" element={<CategoryPage />} />
             <Route path="/post/:slug" element={<PostDetail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
