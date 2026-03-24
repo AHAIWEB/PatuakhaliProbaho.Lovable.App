@@ -78,7 +78,7 @@ const Index = () => {
       <CategoryNav />
       <NewsTicker />
 
-      <div className="container mx-auto px-4 mt-4">
+      <div className="container mx-auto px-3 sm:px-4 mt-3 sm:mt-4">
         <AdSpace size="leaderboard" />
       </div>
 
