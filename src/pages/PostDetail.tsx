@@ -7,13 +7,15 @@ import CategoryNav from "@/components/CategoryNav";
 import Footer from "@/components/Footer";
 import AdSpace from "@/components/AdSpace";
 import { cleanText } from "@/lib/content";
-import { ExternalLink, Share2, Facebook, Twitter, Copy, Check } from "lucide-react";
+import { ExternalLink, Share2, Facebook, Twitter, Copy, Check, Camera } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const PostDetail = () => {
   const { slug } = useParams<{ slug: string }>();
   const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", slug],
@@ -43,19 +45,36 @@ const PostDetail = () => {
   const postUrl = window.location.href;
   const encodedUrl = encodeURIComponent(postUrl);
   const encodedTitle = encodeURIComponent(post.title);
+  const sourceUrl = post.source_url || postUrl;
+
+  // Blogger share with image + summary + "বিস্তারিত পড়ুন" link to original source
+  const bloggerContent = `${post.image_url ? `<div style="text-align:center;margin-bottom:16px"><img src="${post.image_url}" alt="${cleanText(post.title)}" style="max-width:100%;border-radius:8px" /></div>` : ""}
+<p>${cleanText(displayContent).substring(0, 500)}...</p>
+<p style="text-align:center;margin-top:20px"><a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" style="background:#c0392b;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold">বিস্তারিত পড়ুন →</a></p>
+<p style="font-size:12px;color:#888;text-align:center">সূত্র: ${post.source_name || "পটুয়াখালী প্রবাহ"}</p>`;
 
   const shareLinks = {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
     twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
     whatsapp: `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-    blogger: `https://www.blogger.com/blog-this.g?u=${encodedUrl}&n=${encodedTitle}&t=${encodeURIComponent(displayContent.substring(0, 200))}`,
+    blogger: `https://www.blogger.com/blog-this.g?n=${encodedTitle}&b=${encodeURIComponent(bloggerContent)}&t=${encodedTitle}&eurl=${encodeURIComponent(sourceUrl)}`,
   };
 
   const copyLink = () => {
     navigator.clipboard.writeText(postUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToPhotoCard = () => {
+    const params = new URLSearchParams({
+      title: post.title,
+      image: post.image_url || "",
+      quote: displayContent.substring(0, 150),
+      source: sourceUrl,
+    });
+    navigate(`/photo-card?${params.toString()}`);
   };
 
   return (
@@ -99,6 +118,9 @@ const PostDetail = () => {
           </a>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={copyLink}>
             {copied ? <><Check className="h-3.5 w-3.5 mr-1" />কপি হয়েছে</> : <><Copy className="h-3.5 w-3.5 mr-1" />লিংক কপি</>}
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToPhotoCard}>
+            <Camera className="h-3.5 w-3.5 mr-1" />কার্ড
           </Button>
         </div>
 

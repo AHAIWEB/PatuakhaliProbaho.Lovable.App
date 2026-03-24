@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2 } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { cleanText } from "@/lib/content";
 
 type Post = Tables<"posts">;
 type RSSFeed = Tables<"rss_feeds">;
@@ -66,6 +67,12 @@ const Admin = () => {
   const [editCategory, setEditCategory] = useState("");
   const [editContent, setEditContent] = useState("");
 
+  // Edit category
+  const [editingCat, setEditingCat] = useState<Category | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatSlug, setEditCatSlug] = useState("");
+  const [editCatParent, setEditCatParent] = useState("");
+
   // Post search/filter
   const [postSearch, setPostSearch] = useState("");
   const [postPage, setPostPage] = useState(0);
@@ -113,7 +120,7 @@ const Admin = () => {
         if (matchedCat) setQuickCategory(matchedCat.id);
       }
       if (data?.tags?.length && !quickTags) setQuickTags(data.tags.join(", "));
-      toast({ title: "সফল", description: `"${data?.siteName || 'সাইট'}" থেকে ফেচ হয়েছে (ক্যাটাগরি: ${data?.category || 'অজানা'})` });
+      toast({ title: "সফল", description: `"${data?.siteName || 'সাইট'}" থেকে ফেচ হয়েছে` });
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message || "URL ফেচ ব্যর্থ", variant: "destructive" });
     }
@@ -238,8 +245,9 @@ const Admin = () => {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    const maxSort = categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 0);
     const { error } = await supabase.from("categories").insert({
-      name: newCatName, slug: newCatSlug, parent_id: newCatParent || null,
+      name: newCatName, slug: newCatSlug, parent_id: newCatParent || null, sort_order: maxSort + 1,
     });
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
@@ -248,6 +256,46 @@ const Admin = () => {
       setNewCatName(""); setNewCatSlug(""); setNewCatParent("");
       fetchData();
     }
+  };
+
+  const deleteCategory = async (id: string) => {
+    if (!confirm("এই ক্যাটাগরি মুছে ফেলতে চান?")) return;
+    await supabase.from("categories").delete().eq("id", id);
+    fetchData();
+  };
+
+  const startEditCategory = (cat: Category) => {
+    setEditingCat(cat);
+    setEditCatName(cat.name);
+    setEditCatSlug(cat.slug);
+    setEditCatParent(cat.parent_id || "");
+  };
+
+  const saveEditCategory = async () => {
+    if (!editingCat) return;
+    const { error } = await supabase.from("categories").update({
+      name: editCatName, slug: editCatSlug, parent_id: editCatParent || null,
+    }).eq("id", editingCat.id);
+    if (error) {
+      toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "সফল", description: "ক্যাটাগরি আপডেট হয়েছে" });
+      setEditingCat(null);
+      fetchData();
+    }
+  };
+
+  const moveCategoryOrder = async (cat: Category, direction: "up" | "down") => {
+    const sameLevel = categories.filter(c => c.parent_id === cat.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const idx = sameLevel.findIndex(c => c.id === cat.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sameLevel.length) return;
+    const other = sameLevel[swapIdx];
+    await Promise.all([
+      supabase.from("categories").update({ sort_order: other.sort_order }).eq("id", cat.id),
+      supabase.from("categories").update({ sort_order: cat.sort_order }).eq("id", other.id),
+    ]);
+    fetchData();
   };
 
   const startEdit = (post: Post) => {
@@ -261,7 +309,7 @@ const Admin = () => {
     if (!editingPost) return;
     const { error } = await supabase.from("posts").update({
       title: editTitle, category_id: editCategory || null, content: editContent,
-      excerpt: editContent.substring(0, 200),
+      excerpt: cleanText(editContent).substring(0, 200),
     }).eq("id", editingPost.id);
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
@@ -277,9 +325,14 @@ const Admin = () => {
     fetchData();
   };
 
-  // Share to Blogger
+  // Share to Blogger with image + summary + source link
   const shareToBlogger = (post: Post) => {
-    const bloggerUrl = `https://www.blogger.com/blog-this.g?n=${encodeURIComponent(post.title)}&b=${encodeURIComponent(post.content?.substring(0, 500) || post.title)}&t=${encodeURIComponent(post.title)}&eurl=${encodeURIComponent(post.source_url || window.location.origin + "/post/" + post.slug)}`;
+    const sourceUrl = post.source_url || `${window.location.origin}/post/${post.slug}`;
+    const summary = cleanText(post.content || post.excerpt || post.title).substring(0, 500);
+    const blogContent = `${post.image_url ? `<div style="text-align:center;margin-bottom:16px"><img src="${post.image_url}" alt="${cleanText(post.title)}" style="max-width:100%;border-radius:8px" /></div>` : ""}
+<p>${summary}...</p>
+<p style="text-align:center;margin-top:20px"><a href="${sourceUrl}" target="_blank" style="background:#c0392b;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold">বিস্তারিত পড়ুন →</a></p>`;
+    const bloggerUrl = `https://www.blogger.com/blog-this.g?n=${encodeURIComponent(cleanText(post.title))}&b=${encodeURIComponent(blogContent)}&t=${encodeURIComponent(cleanText(post.title))}&eurl=${encodeURIComponent(sourceUrl)}`;
     window.open(bloggerUrl, "_blank", "width=700,height=500");
   };
 
@@ -294,7 +347,18 @@ const Admin = () => {
     }
   };
 
-  // Filter posts by source type
+  // Go to PhotoCard with post data
+  const goToPhotoCard = (post: Post) => {
+    const params = new URLSearchParams({
+      title: post.title,
+      image: post.image_url || "",
+      quote: cleanText(post.content || post.excerpt || "").substring(0, 150),
+      source: post.source_url || "",
+    });
+    navigate(`/photo-card?${params.toString()}`);
+  };
+
+  // Filter posts
   const filteredPosts = posts.filter((p) => {
     const matchSearch = !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
       (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase());
@@ -362,9 +426,12 @@ const Admin = () => {
   const scraperPostCount = posts.filter(p => !p.rss_feed_id && !!p.source_name && !p.author_id).length;
   const manualPostCount = posts.filter(p => !!p.author_id).length;
 
+  // Sorted categories for display
+  const parentCats = categories.filter(c => !c.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const getSubCats = (pid: string) => categories.filter(c => c.parent_id === pid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
   return (
     <div className="min-h-screen bg-muted/30">
-      {/* Mobile-friendly header */}
       <div className="bg-primary text-primary-foreground p-3 sm:p-4 sticky top-0 z-50">
         <div className="container mx-auto flex items-center justify-between gap-2">
           <h1 className="text-base sm:text-xl font-bold truncate">📋 এডমিন</h1>
@@ -425,10 +492,10 @@ const Admin = () => {
                   {quickImage && <img src={quickImage} alt="preview" className="h-16 object-cover rounded" />}
                   <select className="w-full border rounded-md p-2 bg-background text-sm" value={quickCategory} onChange={(e) => setQuickCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন করুন</option>
-                    {categories.filter((c) => !c.parent_id).map((c) => (
+                    {parentCats.map((c) => (
                       <optgroup key={c.id} label={c.name}>
                         <option value={c.id}>{c.name}</option>
-                        {categories.filter((sc) => sc.parent_id === c.id).map((sc) => (
+                        {getSubCats(c.id).map((sc) => (
                           <option key={sc.id} value={sc.id}>↳ {sc.name}</option>
                         ))}
                       </optgroup>
@@ -457,10 +524,10 @@ const Admin = () => {
                   <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="শিরোনাম" className="text-sm h-8" />
                   <select className="w-full border rounded-md p-1.5 bg-background text-sm" value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন</option>
-                    {categories.filter((c) => !c.parent_id).map((c) => (
+                    {parentCats.map((c) => (
                       <optgroup key={c.id} label={c.name}>
                         <option value={c.id}>{c.name}</option>
-                        {categories.filter((sc) => sc.parent_id === c.id).map((sc) => (
+                        {getSubCats(c.id).map((sc) => (
                           <option key={sc.id} value={sc.id}>↳ {sc.name}</option>
                         ))}
                       </optgroup>
@@ -478,7 +545,6 @@ const Admin = () => {
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-sm sm:text-base">সকল পোস্ট ({filteredPosts.length})</CardTitle>
                   </div>
-                  {/* Source filter buttons */}
                   <div className="flex gap-1 flex-wrap">
                     {([
                       { key: "all" as const, label: "সকল", count: posts.length },
@@ -507,7 +573,7 @@ const Admin = () => {
                   {pagedPosts.map((post) => (
                     <div key={post.id} className="border rounded-lg p-2.5 bg-card space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-medium leading-tight flex-1">{post.title}</p>
+                        <p className="text-xs font-medium leading-tight flex-1">{cleanText(post.title)}</p>
                         {post.rss_feed_id ? <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">RSS</span>
                           : post.author_id ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex-shrink-0">ম্যানুয়াল</span>
                           : post.source_name ? <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0">স্ক্র্যাপ</span>
@@ -531,6 +597,9 @@ const Admin = () => {
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => startEdit(post)} className="h-6 w-6">
                           <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => goToPhotoCard(post)} className="h-6 w-6" title="কার্ড">
+                          <Camera className="h-3 w-3" />
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => shareToBlogger(post)} className="h-6 w-6" title="Blogger">
                           <ExternalLink className="h-3 w-3" />
@@ -562,7 +631,7 @@ const Admin = () => {
                   <TableBody>
                     {pagedPosts.map((post) => (
                       <TableRow key={post.id}>
-                        <TableCell className="max-w-[200px] truncate font-medium text-sm">{post.title}</TableCell>
+                        <TableCell className="max-w-[200px] truncate font-medium text-sm">{cleanText(post.title)}</TableCell>
                         <TableCell className="text-xs">
                           {post.rss_feed_id ? <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px]">📡 RSS</span>
                             : post.author_id ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">✍️</span>
@@ -586,6 +655,9 @@ const Admin = () => {
                             </Button>
                             <Button size="icon" variant="ghost" onClick={() => startEdit(post)} title="এডিট" className="h-7 w-7">
                               <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => goToPhotoCard(post)} title="কার্ড" className="h-7 w-7">
+                              <Camera className="h-3 w-3" />
                             </Button>
                             <Button size="icon" variant="ghost" onClick={() => shareToBlogger(post)} title="Blogger" className="h-7 w-7">
                               <ExternalLink className="h-3 w-3" />
@@ -825,24 +897,84 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          {/* Categories Tab */}
+          {/* Categories Tab - Full CRUD + Reorder */}
           <TabsContent value="categories">
             <Card>
-              <CardHeader className="p-3 sm:p-6"><CardTitle className="text-sm sm:text-base">ক্যাটাগরি ম্যানেজমেন্ট</CardTitle></CardHeader>
+              <CardHeader className="p-3 sm:p-6"><CardTitle className="text-sm sm:text-base">ক্যাটাগরি ম্যানেজমেন্ট ({categories.length})</CardTitle></CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
+                {/* Edit Category Modal */}
+                {editingCat && (
+                  <div className="mb-4 p-3 border border-accent rounded-lg bg-accent/5 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-medium">ক্যাটাগরি এডিট</p>
+                      <Button variant="ghost" size="icon" onClick={() => setEditingCat(null)} className="h-6 w-6"><X className="h-3 w-3" /></Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Input placeholder="নাম" value={editCatName} onChange={(e) => setEditCatName(e.target.value)} className="text-sm h-8" />
+                      <Input placeholder="slug" value={editCatSlug} onChange={(e) => setEditCatSlug(e.target.value)} className="text-sm h-8" />
+                      <select className="border rounded-md p-1.5 bg-background text-sm" value={editCatParent} onChange={(e) => setEditCatParent(e.target.value)}>
+                        <option value="">প্যারেন্ট নেই</option>
+                        {categories.filter(c => !c.parent_id && c.id !== editingCat.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <Button onClick={saveEditCategory} size="sm" className="h-7 text-xs"><Save className="w-3 h-3 mr-1" />সেভ</Button>
+                  </div>
+                )}
+
+                {/* Add New Category */}
                 <form onSubmit={handleAddCategory} className="flex gap-2 mb-4 flex-wrap">
                   <Input placeholder="নাম" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required className="flex-1 min-w-[100px] text-sm h-8" />
                   <Input placeholder="slug" value={newCatSlug} onChange={(e) => setNewCatSlug(e.target.value)} required className="flex-1 min-w-[80px] text-sm h-8" />
                   <select className="border rounded-md p-1.5 bg-background text-sm min-w-[100px]" value={newCatParent} onChange={(e) => setNewCatParent(e.target.value)}>
                     <option value="">প্যারেন্ট</option>
-                    {categories.filter((c) => !c.parent_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {parentCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                   <Button type="submit" size="sm" className="h-8"><Plus className="w-3.5 h-3.5" /></Button>
                 </form>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {categories.map((cat) => (
-                    <div key={cat.id} className={`p-1.5 rounded border text-xs ${cat.parent_id ? "ml-3 bg-muted/50" : "font-medium"}`}>
-                      {cat.name} <span className="text-[10px] text-muted-foreground">({cat.slug})</span>
+
+                {/* Category List with Edit/Delete/Reorder */}
+                <div className="space-y-1">
+                  {parentCats.map((cat, idx) => (
+                    <div key={cat.id}>
+                      <div className="flex items-center gap-1 p-2 rounded border bg-card hover:bg-muted/50 transition-colors">
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm font-medium flex-1">{cat.name} <span className="text-[10px] text-muted-foreground">({cat.slug})</span></span>
+                        <span className="text-[10px] text-muted-foreground mr-1">#{cat.sort_order}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => moveCategoryOrder(cat, "up")} disabled={idx === 0}>
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => moveCategoryOrder(cat, "down")} disabled={idx === parentCats.length - 1}>
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditCategory(cat)}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        {userRole === "admin" && (
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteCategory(cat.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                      {/* Sub-categories */}
+                      {getSubCats(cat.id).map((sub, si) => (
+                        <div key={sub.id} className="flex items-center gap-1 p-1.5 ml-6 rounded border-l-2 border-primary/30 bg-muted/30 mt-0.5">
+                          <span className="text-xs flex-1">↳ {sub.name} <span className="text-[10px] text-muted-foreground">({sub.slug})</span></span>
+                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => moveCategoryOrder(sub, "up")} disabled={si === 0}>
+                            <ArrowUp className="h-2.5 w-2.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => moveCategoryOrder(sub, "down")} disabled={si === getSubCats(cat.id).length - 1}>
+                            <ArrowDown className="h-2.5 w-2.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => startEditCategory(sub)}>
+                            <Edit className="h-2.5 w-2.5" />
+                          </Button>
+                          {userRole === "admin" && (
+                            <Button size="icon" variant="ghost" className="h-5 w-5 text-destructive" onClick={() => deleteCategory(sub.id)}>
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
