@@ -1,18 +1,19 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode } from "lucide-react";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Move } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Post = Tables<"posts">;
-
 type TemplateType = "news" | "quote" | "event" | "minimal" | "breaking";
+type CardSize = "square" | "story" | "landscape" | "poster";
 
 const templates: { id: TemplateType; name: string; icon: string }[] = [
   { id: "news", name: "নিউজ কার্ড", icon: "📰" },
@@ -22,8 +23,16 @@ const templates: { id: TemplateType; name: string; icon: string }[] = [
   { id: "breaking", name: "ব্রেকিং নিউজ", icon: "🔴" },
 ];
 
+const cardSizes: { id: CardSize; name: string; w: number; h: number }[] = [
+  { id: "square", name: "স্কয়ার (1:1)", w: 1080, h: 1080 },
+  { id: "story", name: "স্টোরি (9:16)", w: 1080, h: 1920 },
+  { id: "landscape", name: "ল্যান্ডস্কেপ (16:9)", w: 1920, h: 1080 },
+  { id: "poster", name: "পোস্টার (3:4)", w: 1080, h: 1440 },
+];
+
 const PhotoCard = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [customTitle, setCustomTitle] = useState("");
@@ -38,6 +47,7 @@ const PhotoCard = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<TemplateType>("news");
+  const [activeSize, setActiveSize] = useState<CardSize>("square");
   const [qrUrl, setQrUrl] = useState("");
   const [showQr, setShowQr] = useState(false);
 
@@ -46,13 +56,31 @@ const PhotoCard = () => {
   const [uploadedPersonImage, setUploadedPersonImage] = useState<string | null>(null);
   const [uploadedFrameImage, setUploadedFrameImage] = useState<string | null>(null);
   const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
-  const [personPosition, setPersonPosition] = useState<"bottom-right" | "bottom-left" | "center-right" | "center-left">("bottom-right");
+  const [personOffsetX, setPersonOffsetX] = useState(50);
+  const [personOffsetY, setPersonOffsetY] = useState(50);
   const [personSize, setPersonSize] = useState(50);
+  const [removeBg, setRemoveBg] = useState(false);
 
   const bgInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
   const frameInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Touch drag state for person image
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+
+  // Load from URL params (from Card Make button)
+  useEffect(() => {
+    const title = searchParams.get("title");
+    const image = searchParams.get("image");
+    const quote = searchParams.get("quote");
+    const source = searchParams.get("source");
+    if (title) setCustomTitle(title);
+    if (image) setFetchedImage(image);
+    if (quote) setCustomQuote(quote);
+    if (source) setQrUrl(source);
+  }, [searchParams]);
 
   useEffect(() => {
     supabase.from("posts").select("*").eq("status", "published")
@@ -74,6 +102,48 @@ const PhotoCard = () => {
     const reader = new FileReader();
     reader.onload = () => setter(reader.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handlePersonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      if (removeBg) {
+        // Simple white background removal using canvas
+        removeBackground(result).then(setUploadedPersonImage);
+      } else {
+        setUploadedPersonImage(result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeBackground = async (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        // Simple threshold-based bg removal (white/light bg)
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          // If pixel is close to white/very light, make transparent
+          if (r > 220 && g > 220 && b > 220) {
+            data[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.src = dataUrl;
+    });
   };
 
   const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
@@ -106,7 +176,6 @@ const PhotoCard = () => {
   };
 
   const generateQRDataUrl = (text: string, size = 150): string => {
-    // Simple QR-like placeholder using canvas text - for real QR, generate via API
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
@@ -114,14 +183,11 @@ const PhotoCard = () => {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, size, size);
     ctx.fillStyle = "#000000";
-    // Draw a simple QR-like pattern
     const cellSize = Math.floor(size / 21);
     for (let i = 0; i < 21; i++) {
       for (let j = 0; j < 21; j++) {
-        // Position detection patterns (corners)
         const isCorner = (i < 7 && j < 7) || (i < 7 && j > 13) || (i > 13 && j < 7);
         const isBorder = isCorner && (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4));
-        // Data pattern from text hash
         const hash = (text.charCodeAt(i % text.length) * (j + 1) + i * 31) % 3;
         if (isBorder || (!isCorner && hash === 0)) {
           ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
@@ -131,16 +197,20 @@ const PhotoCard = () => {
     return canvas.toDataURL("image/png");
   };
 
-  const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
-    const W = 1080, H = 1080;
+  const getCanvasSize = () => {
+    const size = cardSizes.find(s => s.id === activeSize) || cardSizes[0];
+    return { W: size.w, H: size.h };
+  };
 
-    // Step 1: Background
+  const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
+    const { W, H } = getCanvasSize();
+
+    // Background
     const bgSrc = uploadedBgImage || fetchedImage;
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
         ctx.drawImage(bgImg, 0, 0, W, H);
-        // Overlay for readability
         if (activeTemplate !== "minimal") {
           ctx.fillStyle = "rgba(0,0,0,0.35)";
           ctx.fillRect(0, 0, W, H);
@@ -154,7 +224,7 @@ const PhotoCard = () => {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // Step 2: Frame overlay
+    // Frame overlay
     if (uploadedFrameImage) {
       try {
         const frameImg = await loadImage(uploadedFrameImage);
@@ -162,51 +232,36 @@ const PhotoCard = () => {
       } catch { /* continue */ }
     }
 
-    // Step 3: Template-specific design
+    // Template drawing
     switch (activeTemplate) {
-      case "news":
-        drawNewsTemplate(ctx, W, H);
-        break;
-      case "quote":
-        drawQuoteTemplate(ctx, W, H);
-        break;
-      case "event":
-        drawEventTemplate(ctx, W, H);
-        break;
-      case "minimal":
-        drawMinimalTemplate(ctx, W, H);
-        break;
-      case "breaking":
-        drawBreakingTemplate(ctx, W, H);
-        break;
+      case "news": drawNewsTemplate(ctx, W, H); break;
+      case "quote": drawQuoteTemplate(ctx, W, H); break;
+      case "event": drawEventTemplate(ctx, W, H); break;
+      case "minimal": drawMinimalTemplate(ctx, W, H); break;
+      case "breaking": drawBreakingTemplate(ctx, W, H); break;
     }
 
-    // Step 4: Person image
+    // Person image with offset controls
     if (uploadedPersonImage) {
       try {
         const personImg = await loadImage(uploadedPersonImage);
         const size = Math.round(W * (personSize / 100));
-        let px = 0, py = 0;
-        switch (personPosition) {
-          case "bottom-right": px = W - size; py = H - size; break;
-          case "bottom-left": px = 0; py = H - size; break;
-          case "center-right": px = W - size; py = (H - size) / 2; break;
-          case "center-left": px = 0; py = (H - size) / 2; break;
-        }
+        const px = Math.round((W - size) * (personOffsetX / 100));
+        const py = Math.round((H - size) * (personOffsetY / 100));
         ctx.drawImage(personImg, px, py, size, size);
       } catch { /* failed */ }
     }
 
-    // Step 5: Logo
+    // Logo
     if (uploadedLogo) {
       try {
         const logoImg = await loadImage(uploadedLogo);
         const logoSize = 120;
         ctx.drawImage(logoImg, W - logoSize - 30, 20, logoSize, logoSize);
-      } catch { /* fallback text logo */ }
+      } catch { /* fallback */ }
     }
 
-    // Step 6: QR Code
+    // QR Code
     if (showQr && qrUrl) {
       try {
         const qrDataUrl = generateQRDataUrl(qrUrl, 150);
@@ -219,27 +274,20 @@ const PhotoCard = () => {
   };
 
   const drawNewsTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Top accent bar
     ctx.fillStyle = textColor;
     ctx.fillRect(0, 0, W, 8);
-
-    // Category badge
     ctx.fillStyle = textColor;
     ctx.fillRect(60, 60, 200, 45);
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("সংবাদ", 160, 93);
-
-    // Logo text
     if (!uploadedLogo) {
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 28px 'Hind Siliguri', sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 90);
     }
-
-    // Title
     ctx.textAlign = "left";
     const maxW = uploadedPersonImage ? 580 : 900;
     if (customTitle) {
@@ -249,7 +297,6 @@ const PhotoCard = () => {
       let y = 220;
       lines.forEach((line) => { ctx.fillText(line, 80, y); y += 68; });
     }
-
     if (customQuote) {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "36px 'Hind Siliguri', sans-serif";
@@ -257,10 +304,7 @@ const PhotoCard = () => {
       let y = customTitle ? 220 + wrapText(ctx, customTitle, maxW).length * 68 + 30 : 280;
       lines.forEach((line) => { ctx.fillText(line, 80, y); y += 50; });
     }
-
     drawPersonInfo(ctx, W, H, "#ffffff");
-
-    // Bottom bar
     ctx.fillStyle = textColor;
     ctx.fillRect(0, H - 50, W, 50);
     ctx.fillStyle = "#ffffff";
@@ -272,56 +316,38 @@ const PhotoCard = () => {
   };
 
   const drawQuoteTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Large quote mark
     ctx.fillStyle = "#f4c542";
     ctx.font = "bold 200px serif";
     ctx.textAlign = "left";
     ctx.fillText("❝", 40, 230);
-
-    // Logo text
     if (!uploadedLogo) {
       ctx.fillStyle = textColor;
       ctx.font = "bold 28px 'Hind Siliguri', sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 60);
     }
-
-    // Date
-    const today = new Date();
-    const dateStr = `${today.getDate()} ${["জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টে", "অক্টো", "নভে", "ডিসে"][today.getMonth()]} ${today.getFullYear()}`;
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = "22px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(dateStr, 80, 60);
-
     const maxW = uploadedPersonImage ? 580 : 860;
-
-    // Quote text (larger)
     if (customTitle) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
       ctx.font = "bold 56px 'Hind Siliguri', sans-serif";
+      ctx.textAlign = "left";
       const lines = wrapText(ctx, customTitle, maxW);
       let y = 340;
       lines.forEach((line) => { ctx.fillText(line, 100, y); y += 74; });
     }
-
     if (customQuote) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.8)" : "#333";
       ctx.font = "italic 40px 'Hind Siliguri', sans-serif";
+      ctx.textAlign = "left";
       const lines = wrapText(ctx, customQuote, maxW);
       let y = customTitle ? 340 + wrapText(ctx, customTitle, maxW).length * 74 + 30 : 350;
       lines.forEach((line) => { ctx.fillText(line, 100, y); y += 54; });
     }
-
-    // Closing quote
     ctx.fillStyle = "#f4c542";
     ctx.font = "bold 200px serif";
     ctx.textAlign = "right";
     ctx.fillText("❞", W - 40, H - 120);
-
     drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : textColor);
-
-    // Bottom bar
     ctx.fillStyle = textColor;
     ctx.fillRect(0, H - 45, W, 45);
     ctx.fillStyle = "#ffffff";
@@ -331,27 +357,21 @@ const PhotoCard = () => {
   };
 
   const drawEventTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Side accent
     ctx.fillStyle = textColor;
     ctx.fillRect(0, 0, 12, H);
-
-    // Event badge
     ctx.fillStyle = "#f4c542";
     ctx.fillRect(40, 60, 220, 50);
     ctx.fillStyle = "#000";
     ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("📅 ইভেন্ট", 150, 96);
-
     if (!uploadedLogo) {
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 92);
     }
-
     const maxW = uploadedPersonImage ? 560 : 880;
-
     if (customTitle) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
       ctx.font = "bold 50px 'Hind Siliguri', sans-serif";
@@ -360,7 +380,6 @@ const PhotoCard = () => {
       let y = 220;
       lines.forEach((line) => { ctx.fillText(line, 60, y); y += 65; });
     }
-
     if (customQuote) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.85)" : "#444";
       ctx.font = "36px 'Hind Siliguri', sans-serif";
@@ -369,9 +388,7 @@ const PhotoCard = () => {
       let y = customTitle ? 220 + wrapText(ctx, customTitle, maxW).length * 65 + 30 : 260;
       lines.forEach((line) => { ctx.fillText(line, 60, y); y += 48; });
     }
-
     drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-
     ctx.fillStyle = textColor;
     ctx.fillRect(0, H - 50, W, 50);
     ctx.fillStyle = "#ffffff";
@@ -381,7 +398,6 @@ const PhotoCard = () => {
   };
 
   const drawMinimalTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Clean white/light bg card
     if (!uploadedBgImage && !fetchedImage) {
       const grad = ctx.createLinearGradient(0, 0, W, H);
       grad.addColorStop(0, "#f8f9fa");
@@ -389,13 +405,9 @@ const PhotoCard = () => {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
     }
-
-    // Thin accent line
     ctx.fillStyle = textColor;
     ctx.fillRect(80, 200, 120, 4);
-
     const maxW = uploadedPersonImage ? 560 : 860;
-
     if (customTitle) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : "#222";
       ctx.font = "bold 48px 'Hind Siliguri', sans-serif";
@@ -404,7 +416,6 @@ const PhotoCard = () => {
       let y = 280;
       lines.forEach((line) => { ctx.fillText(line, 80, y); y += 64; });
     }
-
     if (customQuote) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.8)" : "#555";
       ctx.font = "34px 'Hind Siliguri', sans-serif";
@@ -413,9 +424,7 @@ const PhotoCard = () => {
       let y = customTitle ? 280 + wrapText(ctx, customTitle, maxW).length * 64 + 25 : 290;
       lines.forEach((line) => { ctx.fillText(line, 80, y); y += 46; });
     }
-
     drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-
     if (!uploadedLogo) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
       ctx.font = "24px 'Hind Siliguri', sans-serif";
@@ -425,23 +434,19 @@ const PhotoCard = () => {
   };
 
   const drawBreakingTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Red top banner
     ctx.fillStyle = "#e74c3c";
     ctx.fillRect(0, 0, W, 100);
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 48px 'Hind Siliguri', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("🔴 ব্রেকিং নিউজ 🔴", W / 2, 68);
-
     if (!uploadedLogo) {
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("পটুয়াখালী প্রবাহ", W - 40, 40);
     }
-
     const maxW = uploadedPersonImage ? 560 : 900;
-
     if (customTitle) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : "#222";
       ctx.font = "bold 58px 'Hind Siliguri', sans-serif";
@@ -450,7 +455,6 @@ const PhotoCard = () => {
       let y = 230;
       lines.forEach((line) => { ctx.fillText(line, 70, y); y += 74; });
     }
-
     if (customQuote) {
       ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.85)" : "#333";
       ctx.font = "38px 'Hind Siliguri', sans-serif";
@@ -459,10 +463,7 @@ const PhotoCard = () => {
       let y = customTitle ? 230 + wrapText(ctx, customTitle, maxW).length * 74 + 30 : 260;
       lines.forEach((line) => { ctx.fillText(line, 70, y); y += 52; });
     }
-
     drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-
-    // Red bottom
     ctx.fillStyle = "#e74c3c";
     ctx.fillRect(0, H - 55, W, 55);
     ctx.fillStyle = "#ffffff";
@@ -481,12 +482,10 @@ const PhotoCard = () => {
     ctx.moveTo(textX, H - 220);
     ctx.lineTo(textX + 200, H - 220);
     ctx.stroke();
-
     ctx.fillStyle = color;
     ctx.font = "bold 30px 'Hind Siliguri', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(quotePerson, textX, H - 180);
-
     if (quoteDesignation) {
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.7;
@@ -501,10 +500,9 @@ const PhotoCard = () => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    canvas.width = 1080;
-    canvas.height = 1080;
-
+    const { W, H } = getCanvasSize();
+    canvas.width = W;
+    canvas.height = H;
     await drawTemplate(ctx);
     setPreview(canvas.toDataURL("image/png"));
   };
@@ -543,6 +541,28 @@ const PhotoCard = () => {
     } catch { downloadCard(); }
   };
 
+  // Touch handlers for person image drag
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!uploadedPersonImage) return;
+    const touch = e.touches[0];
+    dragStartRef.current = { x: touch.clientX, y: touch.clientY, ox: personOffsetX, oy: personOffsetY };
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const touch = e.touches[0];
+    const dx = (touch.clientX - dragStartRef.current.x) / 2;
+    const dy = (touch.clientY - dragStartRef.current.y) / 2;
+    setPersonOffsetX(Math.max(0, Math.min(100, dragStartRef.current.ox + dx)));
+    setPersonOffsetY(Math.max(0, Math.min(100, dragStartRef.current.oy + dy)));
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -550,7 +570,7 @@ const PhotoCard = () => {
         <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">📸 কুইক ফটোকার্ড</h1>
 
         {/* Template Selector */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+        <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
           {templates.map((t) => (
             <button
               key={t.id}
@@ -560,6 +580,21 @@ const PhotoCard = () => {
               }`}
             >
               <span>{t.icon}</span>{t.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Card Size Selector */}
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          {cardSizes.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSize(s.id)}
+              className={`px-3 py-1.5 rounded border text-xs whitespace-nowrap transition-colors ${
+                activeSize === s.id ? "bg-accent text-accent-foreground border-accent" : "bg-card hover:bg-muted border-border"
+              }`}
+            >
+              {s.name}
             </button>
           ))}
         </div>
@@ -635,31 +670,42 @@ const PhotoCard = () => {
                   {uploadedLogo && <img src={uploadedLogo} alt="logo" className="mt-2 h-12 rounded border object-contain" />}
                 </div>
 
-                {/* Person */}
+                {/* Person with bg removal + move controls */}
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">ব্যক্তির ছবি</label>
-                  <input ref={personInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedPersonImage)} />
-                  <div className="flex gap-2 items-center">
+                  <input ref={personInputRef} type="file" accept="image/*" className="hidden" onChange={handlePersonUpload} />
+                  <div className="flex gap-2 items-center flex-wrap">
                     <Button onClick={() => personInputRef.current?.click()} variant="outline" size="sm" className="flex-1">
                       <ImagePlus className="w-4 h-4 mr-1" />ব্যক্তির ছবি
                     </Button>
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)} className="rounded" />
+                      BG রিমুভ
+                    </label>
                     {uploadedPersonImage && <Button onClick={() => setUploadedPersonImage(null)} variant="ghost" size="icon" className="h-8 w-8"><X className="w-4 h-4" /></Button>}
                   </div>
                   {uploadedPersonImage && (
                     <div className="mt-2 space-y-2">
                       <img src={uploadedPersonImage} alt="person" className="h-16 rounded border object-cover" />
-                      <div className="flex gap-1 flex-wrap">
-                        {(["bottom-right", "bottom-left", "center-right", "center-left"] as const).map((pos) => (
-                          <button key={pos} onClick={() => setPersonPosition(pos)}
-                            className={`text-[10px] px-2 py-1 rounded border ${personPosition === pos ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                            {pos === "bottom-right" ? "নিচে-ডানে" : pos === "bottom-left" ? "নিচে-বামে" : pos === "center-right" ? "মাঝে-ডানে" : "মাঝে-বামে"}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-muted-foreground">সাইজ:</label>
-                        <input type="range" min="20" max="80" value={personSize} onChange={(e) => setPersonSize(Number(e.target.value))} className="flex-1" />
-                        <span className="text-xs">{personSize}%</span>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <label className="text-[10px] w-6">X:</label>
+                          <input type="range" min="0" max="100" value={personOffsetX} onChange={(e) => setPersonOffsetX(Number(e.target.value))} className="flex-1" />
+                          <span className="text-[10px] w-8">{personOffsetX}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 opacity-0" />
+                          <label className="text-[10px] w-6">Y:</label>
+                          <input type="range" min="0" max="100" value={personOffsetY} onChange={(e) => setPersonOffsetY(Number(e.target.value))} className="flex-1" />
+                          <span className="text-[10px] w-8">{personOffsetY}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 opacity-0" />
+                          <label className="text-[10px] w-6">সাইজ:</label>
+                          <input type="range" min="10" max="100" value={personSize} onChange={(e) => setPersonSize(Number(e.target.value))} className="flex-1" />
+                          <span className="text-[10px] w-8">{personSize}%</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -701,11 +747,11 @@ const PhotoCard = () => {
                   </div>
                 </div>
 
-                {/* QR Code option */}
+                {/* QR Code */}
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={showQr} onChange={(e) => setShowQr(e.target.checked)} className="rounded" />
-                    <QrCode className="w-4 h-4" /> QR কোড যুক্ত করুন
+                    <QrCode className="w-4 h-4" /> QR কোড
                   </label>
                   {showQr && (
                     <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="flex-1 text-xs h-8" />
@@ -725,8 +771,15 @@ const PhotoCard = () => {
               <CardContent>
                 <canvas ref={canvasRef} className="hidden" />
                 {preview ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3"
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  >
                     <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg" />
+                    {uploadedPersonImage && isDragging && (
+                      <p className="text-xs text-center text-muted-foreground">🔄 ড্র্যাগ করে ছবি সরান</p>
+                    )}
                     <div className="flex gap-2">
                       <Button onClick={downloadCard} className="flex-1" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
                       <Button onClick={shareCard} variant="outline" className="flex-1" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
