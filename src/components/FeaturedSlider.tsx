@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useFeaturedPosts } from "@/hooks/usePosts";
 
 const FeaturedSlider = () => {
@@ -46,10 +46,11 @@ const FeaturedSlider = () => {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/80 via-foreground/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6">
-            <span className="news-category-badge mb-2 inline-flex items-center gap-1">
-              <Star className="h-3 w-3" />
-              ফিচার্ড
-            </span>
+            {current.tags && current.tags.length > 0 && (
+              <span className="news-category-badge mb-2 inline-block">
+                {current.tags[0]}
+              </span>
+            )}
             <h2 className="text-card text-lg md:text-2xl font-bold leading-snug mb-2">{current.title}</h2>
             {current.excerpt && <p className="text-card/80 text-sm line-clamp-2 hidden md:block">{current.excerpt}</p>}
             <div className="flex items-center gap-2 mt-2">
