@@ -595,6 +595,104 @@ const Admin = () => {
             </div>
           </TabsContent>
 
+          {/* Web Scraper Tab */}
+          <TabsContent value="scraper">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle>🌐 ওয়েব স্ক্র্যাপার ({scrapeSources.length} সোর্স)</CardTitle>
+                  <Button onClick={handleManualScrape} disabled={loading}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />এখনই স্ক্র্যাপ করুন
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">RSS ছাড়া নিউজ সাইট থেকে স্বয়ংক্রিয়ভাবে নিউজ ফেচ করুন (প্রতি ৫ মিনিট পর পর)</p>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddScrapeSource} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                  <Input placeholder="সাইট URL * (যেমন: https://example.com)" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} required />
+                  <Input placeholder="সোর্স নাম *" value={scrapeName} onChange={(e) => setScrapeName(e.target.value)} required />
+                  
+                  <select className="border rounded-md p-2 bg-background" value={scrapeDivision} onChange={(e) => { setScrapeDivision(e.target.value); setScrapeDistrict(""); setScrapeUpazila(""); }}>
+                    <option value="">বিভাগ নির্বাচন করুন</option>
+                    <option value="barisal">বরিশাল</option>
+                    <option value="dhaka">ঢাকা</option>
+                    <option value="chittagong">চট্টগ্রাম</option>
+                    <option value="sylhet">সিলেট</option>
+                    <option value="rajshahi">রাজশাহী</option>
+                    <option value="rangpur">রংপুর</option>
+                    <option value="khulna">খুলনা</option>
+                    <option value="mymensingh">ময়মনসিংহ</option>
+                  </select>
+
+                  <select className="border rounded-md p-2 bg-background" value={scrapeDistrict} onChange={(e) => { setScrapeDistrict(e.target.value); setScrapeUpazila(""); }} disabled={!scrapeDivision}>
+                    <option value="">জেলা নির্বাচন করুন</option>
+                    {scrapeDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                  </select>
+
+                  <select className="border rounded-md p-2 bg-background" value={scrapeUpazila} onChange={(e) => setScrapeUpazila(e.target.value)} disabled={!scrapeDistrict}>
+                    <option value="">উপজেলা নির্বাচন করুন</option>
+                    {scrapeUpazilasList.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+
+                  <select className="border rounded-md p-2 bg-background" value={scrapeCategory} onChange={(e) => setScrapeCategory(e.target.value)}>
+                    <option value="general">সাধারণ</option>
+                    <option value="national">জাতীয়</option>
+                    <option value="international">আন্তর্জাতিক</option>
+                    <option value="divisional">বিভাগীয়</option>
+                    <option value="sports">খেলা</option>
+                    <option value="entertainment">বিনোদন</option>
+                    <option value="education">শিক্ষা</option>
+                    <option value="technology">প্রযুক্তি</option>
+                    <option value="economy">অর্থনীতি</option>
+                  </select>
+
+                  <select className="border rounded-md p-2 bg-background" value={scrapeInterval} onChange={(e) => setScrapeInterval(e.target.value)}>
+                    <option value="5">প্রতি ৫ মিনিট</option>
+                    <option value="15">প্রতি ১৫ মিনিট</option>
+                    <option value="30">প্রতি ৩০ মিনিট</option>
+                    <option value="60">প্রতি ১ ঘণ্টা</option>
+                    <option value="360">প্রতি ৬ ঘণ্টা</option>
+                  </select>
+
+                  <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />সোর্স যুক্ত করুন</Button>
+                </form>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>নাম</TableHead>
+                      <TableHead>URL</TableHead>
+                      <TableHead>বিভাগ</TableHead>
+                      <TableHead>ইন্টারভাল</TableHead>
+                      <TableHead>শেষ স্ক্র্যাপ</TableHead>
+                      <TableHead>স্ট্যাটাস</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scrapeSources.map((src: any) => (
+                      <TableRow key={src.id}>
+                        <TableCell className="font-medium text-sm">{src.name}</TableCell>
+                        <TableCell className="max-w-[150px] truncate text-xs">{src.url}</TableCell>
+                        <TableCell className="text-xs">{src.division || "-"}</TableCell>
+                        <TableCell className="text-xs">{src.scrape_interval_minutes}মি</TableCell>
+                        <TableCell className="text-xs">{src.last_scraped_at ? new Date(src.last_scraped_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
+                        <TableCell className="text-xs">
+                          {src.last_error ? <span className="text-destructive" title={src.last_error}>❌ ত্রুটি</span> : <span className="text-green-600">✅ সক্রিয়</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => deleteScrapeSource(src.id)} className="text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Categories Tab */}
           <TabsContent value="categories">
             <Card>
