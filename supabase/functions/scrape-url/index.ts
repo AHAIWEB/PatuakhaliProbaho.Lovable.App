@@ -25,11 +25,9 @@ function extractText(html: string): string {
 }
 
 function extractArticleContent(html: string): string {
-  // Try to find article body
   const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
   if (articleMatch) return extractText(articleMatch[1]);
 
-  // Try common content selectors
   const contentPatterns = [
     /<div[^>]*class="[^"]*(?:entry-content|post-content|article-body|story-body|news-content|content-area)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
     /<div[^>]*id="[^"]*(?:content|article|story|post)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
@@ -40,10 +38,93 @@ function extractArticleContent(html: string): string {
     if (match) return extractText(match[1]);
   }
 
-  // Fallback: get all <p> tags
   const paragraphs = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
   const text = paragraphs.map(p => extractText(p)).filter(t => t.length > 30).join("\n\n");
   return text || extractText(html).substring(0, 2000);
+}
+
+// ===== Enhanced keyword-based AI system =====
+
+const categoryKeywords: Record<string, string[]> = {
+  national: ["জাতীয়", "national", "bangladesh", "বাংলাদেশ", "সরকার", "মন্ত্রী", "সংসদ", "প্রধানমন্ত্রী", "রাষ্ট্রপতি", "দেশ", "জাতি"],
+  politics: ["রাজনীতি", "politics", "political", "সংসদ", "নির্বাচন", "ভোট", "দল", "আওয়ামী", "বিএনপি", "জোট", "আন্দোলন", "হরতাল", "election"],
+  international: ["বিশ্ব", "world", "international", "আন্তর্জাতিক", "যুক্তরাষ্ট্র", "ভারত", "চীন", "রাশিয়া", "জাতিসংঘ", "মধ্যপ্রাচ্য", "ইউরোপ", "trump", "modi", "global", "usa", "uk", "europe", "asia"],
+  sports: ["খেলা", "sports", "cricket", "football", "ক্রিকেট", "ফুটবল", "টেস্ট", "ম্যাচ", "গোল", "বিশ্বকাপ", "অলিম্পিক", "ipl", "bpl", "premier league", "world cup", "score", "tournament"],
+  entertainment: ["বিনোদন", "entertainment", "movie", "সিনেমা", "নাটক", "গান", "চলচ্চিত্র", "অভিনেতা", "অভিনেত্রী", "বলিউড", "হলিউড", "ঢালিউড", "টলিউড", "bollywood", "hollywood", "film", "celebrity", "album", "drama"],
+  economy: ["অর্থনীতি", "economy", "business", "ব্যবসা", "বাজার", "শেয়ার", "ডলার", "টাকা", "রপ্তানি", "আমদানি", "জিডিপি", "মুদ্রাস্ফীতি", "stock", "market", "investment", "gdp", "inflation"],
+  education: ["শিক্ষা", "education", "বিশ্ববিদ্যালয়", "স্কুল", "কলেজ", "পরীক্ষা", "ভর্তি", "ফলাফল", "শিক্ষক", "ছাত্র", "এইচএসসি", "এসএসসি", "result", "admission", "university", "exam"],
+  technology: ["প্রযুক্তি", "technology", "tech", "ডিজিটাল", "সফটওয়্যার", "ইন্টারনেট", "এআই", "রোবট", "স্মার্টফোন", "অ্যাপ", "ai", "smartphone", "google", "apple", "microsoft", "startup", "app", "cyber", "digital"],
+  health: ["স্বাস্থ্য", "health", "medical", "চিকিৎসা", "রোগ", "হাসপাতাল", "ডাক্তার", "ওষুধ", "ভ্যাকসিন", "কোভিড", "ক্যান্সার", "ডায়াবেটিস", "disease", "hospital", "doctor", "covid", "vaccine", "who"],
+  lifestyle: ["লাইফস্টাইল", "lifestyle", "fashion", "রান্না", "ফ্যাশন", "রেসিপি", "ফিটনেস", "যোগ", "সৌন্দর্য", "ত্বক", "recipe", "cooking", "beauty", "fitness", "yoga", "diet", "wellness"],
+  religion: ["ধর্ম", "religion", "ইসলাম", "হিন্দু", "বৌদ্ধ", "খ্রিস্টান", "নামাজ", "রোজা", "হজ", "ঈদ", "পূজা", "mosque", "temple", "church", "prayer", "ramadan", "eid"],
+  travel: ["ভ্রমণ", "travel", "tourism", "পর্যটন", "হোটেল", "পাহাড়", "সমুদ্র", "সৈকত", "কক্সবাজার", "সুন্দরবন", "tourist", "beach", "hotel", "trip", "destination"],
+  trending: ["আলোচিত", "trending", "viral", "ভাইরাল", "ব্রেকিং", "সাড়া", "শীর্ষ", "জরুরি", "breaking", "top", "hot", "urgent"],
+  crime: ["অপরাধ", "crime", "হত্যা", "ধর্ষণ", "চুরি", "ডাকাতি", "পুলিশ", "গ্রেপ্তার", "আদালত", "মামলা", "জামিন", "murder", "robbery", "arrest", "court", "police"],
+};
+
+function detectCategory(text: string): string | null {
+  const lower = text.toLowerCase();
+  let bestMatch: string | null = null;
+  let bestScore = 0;
+  for (const [slug, keywords] of Object.entries(categoryKeywords)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (lower.includes(kw.toLowerCase())) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = slug;
+    }
+  }
+  return bestScore >= 1 ? bestMatch : null;
+}
+
+function generateSummary(text: string, maxLen = 200): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  const sentences = clean.split(/[।\.\!\?]+/).filter(s => s.trim().length > 15);
+  if (sentences.length === 0) return clean.substring(0, maxLen);
+  let summary = "";
+  for (const s of sentences) {
+    if ((summary + s).length > maxLen) break;
+    summary += s.trim() + "। ";
+  }
+  return summary.trim() || sentences[0].trim().substring(0, maxLen);
+}
+
+function extractTags(text: string): string[] {
+  const tags: string[] = [];
+  const lower = text.toLowerCase();
+  const tagKeywords = [
+    "বাংলাদেশ", "ভারত", "ক্রিকেট", "ফুটবল", "নির্বাচন", "শিক্ষা", "প্রযুক্তি",
+    "কোভিড", "অর্থনীতি", "পরিবেশ", "দুর্নীতি", "সংসদ", "বিশ্বকাপ", "ঈদ",
+    "রমজান", "পূজা", "বাজেট", "আবহাওয়া", "বন্যা", "ঘূর্ণিঝড়",
+  ];
+  for (const kw of tagKeywords) {
+    if (lower.includes(kw.toLowerCase())) tags.push(kw);
+    if (tags.length >= 5) break;
+  }
+  return tags;
+}
+
+function extractQuotes(text: string): string[] {
+  const quotes: string[] = [];
+  // Bengali/English quote patterns
+  const patterns = [
+    /[❝"❞"']([\s\S]{15,200}?)[❝"❞"']/g,
+    /[']([\s\S]{15,200}?)['']/g,
+    /বলেন\s*,\s*['"]?([\s\S]{15,150}?)['"]?[।\.]/g,
+    /বলেছেন\s*,\s*['"]?([\s\S]{15,150}?)['"]?[।\.]/g,
+    /জানান\s*,\s*['"]?([\s\S]{15,150}?)['"]?[।\.]/g,
+  ];
+  for (const p of patterns) {
+    let m;
+    while ((m = p.exec(text)) !== null) {
+      const q = m[1].trim();
+      if (q.length > 15 && q.length < 250) quotes.push(q);
+      if (quotes.length >= 3) return quotes;
+    }
+  }
+  return quotes;
 }
 
 Deno.serve(async (req) => {
@@ -92,24 +173,31 @@ Deno.serve(async (req) => {
     const categoryMatch = html.match(/<meta\s+property="article:section"\s+content="([^"]+)"/i)
       || html.match(/<meta\s+content="([^"]+)"\s+property="article:section"/i);
     const tagsMatches = html.matchAll(/<meta\s+property="article:tag"\s+content="([^"]+)"/gi);
-    const tags = [...tagsMatches].map(m => m[1]).slice(0, 10);
+    const metaTags = [...tagsMatches].map(m => m[1]).slice(0, 10);
 
     const title = titleMatch?.[1]?.trim() || "";
     const description = descMatch?.[1]?.trim() || "";
     const image = imageMatch?.[1]?.trim() || "";
     const siteName = siteMatch?.[1]?.trim() || new URL(url).hostname;
     const publishedAt = dateMatch?.[1]?.trim() || "";
-    const category = categoryMatch?.[1]?.trim() || "";
+    const metaCategory = categoryMatch?.[1]?.trim() || "";
 
-    // If fullContent requested, extract article body
+    // Extract full content if requested
     let content = description;
     if (fullContent) {
       content = extractArticleContent(html);
       if (content.length < 50) content = description;
     }
 
+    // Enhanced AI: auto-detect category, generate summary, extract tags & quotes
+    const fullText = `${title} ${description} ${content}`;
+    const category = detectCategory(`${metaCategory} ${fullText}`) || metaCategory;
+    const summary = generateSummary(content || description);
+    const autoTags = metaTags.length > 0 ? metaTags : extractTags(fullText);
+    const quotes = extractQuotes(content || description);
+
     return new Response(
-      JSON.stringify({ title, description, content, image, siteName, url, publishedAt, category, tags }),
+      JSON.stringify({ title, description, content, image, siteName, url, publishedAt, category, tags: autoTags, summary, quotes }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
