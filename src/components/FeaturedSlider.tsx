@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useFeaturedPosts } from "@/hooks/usePosts";
+import { cleanText } from "@/lib/content";
 
 const FeaturedSlider = () => {
   const { data: posts, isLoading } = useFeaturedPosts();
@@ -51,8 +52,8 @@ const FeaturedSlider = () => {
                 {current.tags[0]}
               </span>
             )}
-            <h2 className="text-card text-lg md:text-2xl font-bold leading-snug mb-2">{current.title}</h2>
-            {current.excerpt && <p className="text-card/80 text-sm line-clamp-2 hidden md:block">{current.excerpt}</p>}
+            <h2 className="text-card text-lg md:text-2xl font-bold leading-snug mb-2">{cleanText(current.title)}</h2>
+            {current.excerpt && <p className="text-card/80 text-sm line-clamp-2 hidden md:block">{cleanText(current.excerpt)}</p>}
             <div className="flex items-center gap-2 mt-2">
               {current.source_url && (
                 <a href={current.source_url} target="_blank" rel="noopener noreferrer" className="text-highlight text-xs hover:underline">

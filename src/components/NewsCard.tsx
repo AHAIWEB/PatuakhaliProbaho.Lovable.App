@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Post } from "@/hooks/usePosts";
+import { cleanText } from "@/lib/content";
 
 interface NewsCardProps {
   news: Post;
@@ -21,7 +22,7 @@ const NewsCard = ({ news, variant = "default" }: NewsCardProps) => {
           <div className="w-20 h-14 bg-muted rounded-sm shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <Link to={postLink} className="news-card-title text-sm">{news.title}</Link>
+          <Link to={postLink} className="news-card-title text-sm">{cleanText(news.title)}</Link>
           <div className="news-card-meta mt-1 flex items-center gap-1">
             <span>{news.source_name || "নিজস্ব"}</span>
           </div>
@@ -39,7 +40,7 @@ const NewsCard = ({ news, variant = "default" }: NewsCardProps) => {
           <div className="w-28 h-20 bg-muted rounded-sm shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <Link to={postLink} className="news-card-title text-sm">{news.title}</Link>
+          <Link to={postLink} className="news-card-title text-sm">{cleanText(news.title)}</Link>
           <div className="news-card-meta mt-1 flex items-center gap-1">
             <span>{formatDate(news.published_at)}</span> • <span>{news.source_name || "নিজস্ব"}</span>
           </div>
@@ -65,8 +66,8 @@ const NewsCard = ({ news, variant = "default" }: NewsCardProps) => {
         )}
       </div>
       <div className="p-3">
-        <Link to={postLink} className="news-card-title block mb-2">{news.title}</Link>
-        {news.excerpt && <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{news.excerpt}</p>}
+        <Link to={postLink} className="news-card-title block mb-2">{cleanText(news.title)}</Link>
+        {news.excerpt && <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{cleanText(news.excerpt)}</p>}
         <div className="news-card-meta flex items-center gap-1">
           <span>{formatDate(news.published_at)}</span> •{" "}
           {news.source_url ? (
