@@ -114,9 +114,9 @@ const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "
 /* Masonry column renderer */
 const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }) => {
   return (
-    <div className={`columns-${columns} gap-3`} style={{ columnCount: columns }}>
+    <div className={`gap-3`} style={{ columnCount: columns }}>
       {posts.map((news, i) => (
-        <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : "normal"} />
+        <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : (i > 3 ? "small" : "normal")} />
       ))}
     </div>
   );
