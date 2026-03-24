@@ -1,33 +1,48 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Move } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Post = Tables<"posts">;
-type TemplateType = "news" | "quote" | "event" | "minimal" | "breaking";
+type TemplateType = "news" | "quote" | "event" | "minimal" | "breaking" | "elegant" | "gradient" | "bold";
 type CardSize = "square" | "story" | "landscape" | "poster";
 
 const templates: { id: TemplateType; name: string; icon: string }[] = [
-  { id: "news", name: "নিউজ কার্ড", icon: "📰" },
-  { id: "quote", name: "কোটেশন কার্ড", icon: "❝" },
-  { id: "event", name: "ইভেন্ট কার্ড", icon: "📅" },
+  { id: "news", name: "নিউজ", icon: "📰" },
+  { id: "quote", name: "কোটেশন", icon: "❝" },
+  { id: "breaking", name: "ব্রেকিং", icon: "🔴" },
+  { id: "elegant", name: "এলিগ্যান্ট", icon: "💎" },
+  { id: "gradient", name: "গ্রেডিয়েন্ট", icon: "🌈" },
+  { id: "bold", name: "বোল্ড", icon: "⚡" },
+  { id: "event", name: "ইভেন্ট", icon: "📅" },
   { id: "minimal", name: "মিনিমাল", icon: "✨" },
-  { id: "breaking", name: "ব্রেকিং নিউজ", icon: "🔴" },
 ];
 
 const cardSizes: { id: CardSize; name: string; w: number; h: number }[] = [
-  { id: "square", name: "স্কয়ার (1:1)", w: 1080, h: 1080 },
-  { id: "story", name: "স্টোরি (9:16)", w: 1080, h: 1920 },
-  { id: "landscape", name: "ল্যান্ডস্কেপ (16:9)", w: 1920, h: 1080 },
-  { id: "poster", name: "পোস্টার (3:4)", w: 1080, h: 1440 },
+  { id: "square", name: "1:1", w: 1080, h: 1080 },
+  { id: "story", name: "9:16", w: 1080, h: 1920 },
+  { id: "landscape", name: "16:9", w: 1920, h: 1080 },
+  { id: "poster", name: "3:4", w: 1080, h: 1440 },
+];
+
+// Built-in frame presets (drawn via canvas)
+const builtInFrames = [
+  { id: "none", name: "কোনো ফ্রেম নেই" },
+  { id: "classic", name: "ক্লাসিক বর্ডার" },
+  { id: "rounded", name: "রাউন্ড কর্নার" },
+  { id: "double", name: "ডাবল লাইন" },
+  { id: "corner-accent", name: "কর্নার অ্যাক্সেন্ট" },
+  { id: "film-strip", name: "ফিল্ম স্ট্রিপ" },
+  { id: "ornate", name: "অর্নেট" },
 ];
 
 const PhotoCard = () => {
@@ -39,8 +54,8 @@ const PhotoCard = () => {
   const [customQuote, setCustomQuote] = useState("");
   const [quotePerson, setQuotePerson] = useState("");
   const [quoteDesignation, setQuoteDesignation] = useState("");
-  const [bgColor, setBgColor] = useState("#f5f0eb");
-  const [textColor, setTextColor] = useState("#c0392b");
+  const [bgColor, setBgColor] = useState("#1a1a2e");
+  const [textColor, setTextColor] = useState("#e74c3c");
   const [fetchUrl, setFetchUrl] = useState("");
   const [urlFetching, setUrlFetching] = useState(false);
   const [fetchedImage, setFetchedImage] = useState("");
@@ -50,6 +65,9 @@ const PhotoCard = () => {
   const [activeSize, setActiveSize] = useState<CardSize>("square");
   const [qrUrl, setQrUrl] = useState("");
   const [showQr, setShowQr] = useState(false);
+  const [titleFontSize, setTitleFontSize] = useState(52);
+  const [quoteFontSize, setQuoteFontSize] = useState(36);
+  const [activeFrame, setActiveFrame] = useState("none");
 
   // Upload states
   const [uploadedBgImage, setUploadedBgImage] = useState<string | null>(null);
@@ -59,18 +77,22 @@ const PhotoCard = () => {
   const [personOffsetX, setPersonOffsetX] = useState(50);
   const [personOffsetY, setPersonOffsetY] = useState(50);
   const [personSize, setPersonSize] = useState(50);
-  const [removeBg, setRemoveBg] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
 
   const bgInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
   const frameInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Touch drag state for person image
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  // Pointer-based drag state (works on both touch and mouse)
+  const dragRef = useRef<{ startX: number; startY: number; startOx: number; startOy: number; active: boolean }>({
+    startX: 0, startY: 0, startOx: 0, startOy: 0, active: false,
+  });
 
-  // Load from URL params (from Card Make button)
+  const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+
   useEffect(() => {
     const title = searchParams.get("title");
     const image = searchParams.get("image");
@@ -108,20 +130,15 @@ const PhotoCard = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      if (removeBg) {
-        // Simple white background removal using canvas
-        removeBackground(result).then(setUploadedPersonImage);
-      } else {
-        setUploadedPersonImage(result);
-      }
-    };
+    reader.onload = () => setUploadedPersonImage(reader.result as string);
     reader.readAsDataURL(file);
   };
 
-  const removeBackground = async (dataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
+  // Improved background removal using color distance + edge detection
+  const removeBackground = useCallback(async () => {
+    if (!uploadedPersonImage) return;
+    setRemovingBg(true);
+    try {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -131,22 +148,83 @@ const PhotoCard = () => {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
-        // Simple threshold-based bg removal (white/light bg)
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2];
-          // If pixel is close to white/very light, make transparent
-          if (r > 220 && g > 220 && b > 220) {
-            data[i + 3] = 0;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Sample corners to detect background color
+        const samples: number[][] = [];
+        const sampleSize = Math.min(20, Math.floor(w / 10));
+        for (let y = 0; y < sampleSize; y++) {
+          for (let x = 0; x < sampleSize; x++) {
+            const i = (y * w + x) * 4;
+            samples.push([data[i], data[i + 1], data[i + 2]]);
+          }
+          for (let x = w - sampleSize; x < w; x++) {
+            const i = (y * w + x) * 4;
+            samples.push([data[i], data[i + 1], data[i + 2]]);
           }
         }
-        ctx.putImageData(imageData, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.src = dataUrl;
-    });
-  };
+        for (let y = h - sampleSize; y < h; y++) {
+          for (let x = 0; x < sampleSize; x++) {
+            const i = (y * w + x) * 4;
+            samples.push([data[i], data[i + 1], data[i + 2]]);
+          }
+          for (let x = w - sampleSize; x < w; x++) {
+            const i = (y * w + x) * 4;
+            samples.push([data[i], data[i + 1], data[i + 2]]);
+          }
+        }
 
-  const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
+        // Average background color
+        const avgR = samples.reduce((s, c) => s + c[0], 0) / samples.length;
+        const avgG = samples.reduce((s, c) => s + c[1], 0) / samples.length;
+        const avgB = samples.reduce((s, c) => s + c[2], 0) / samples.length;
+
+        const threshold = 60; // Color distance threshold
+        for (let i = 0; i < data.length; i += 4) {
+          const dr = data[i] - avgR;
+          const dg = data[i + 1] - avgG;
+          const db = data[i + 2] - avgB;
+          const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+          if (dist < threshold) {
+            data[i + 3] = 0;
+          } else if (dist < threshold + 20) {
+            // Soft edge
+            data[i + 3] = Math.round(255 * ((dist - threshold) / 20));
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        setUploadedPersonImage(canvas.toDataURL("image/png"));
+        toast({ title: "✅ ব্যাকগ্রাউন্ড রিমুভ হয়েছে" });
+        setRemovingBg(false);
+      };
+      img.src = uploadedPersonImage;
+    } catch {
+      setRemovingBg(false);
+      toast({ title: "ত্রুটি", description: "ব্যাকগ্রাউন্ড রিমুভ ব্যর্থ", variant: "destructive" });
+    }
+  }, [uploadedPersonImage, toast]);
+
+  // AI quote extraction
+  const handleAiQuotes = async (text: string) => {
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-process", {
+        body: { action: "extract_quotes", text },
+      });
+      if (error) throw error;
+      if (data?.quotes?.length) {
+        setExtractedQuotes(data.quotes);
+        toast({ title: "✅ AI কোটেশন", description: `${data.quotes.length}টি কোটেশন পাওয়া গেছে` });
+      } else {
+        toast({ title: "কোনো কোটেশন পাওয়া যায়নি" });
+      }
+    } catch (e: any) {
+      toast({ title: "AI ত্রুটি", description: e.message, variant: "destructive" });
+    }
+    setAiLoading(false);
+  };
 
   const handleFetchUrl = async () => {
     if (!fetchUrl) return;
@@ -156,42 +234,42 @@ const PhotoCard = () => {
       if (error) throw error;
       if (data?.title) setCustomTitle(data.title);
       if (data?.image) setFetchedImage(data.image);
-      if (data?.quotes?.length) setExtractedQuotes(data.quotes);
       setQrUrl(fetchUrl);
-      toast({ title: "সফল", description: `ফেচ হয়েছে (${data?.quotes?.length || 0}টি কোটেশন পাওয়া গেছে)` });
+      // Use AI for better quote extraction
+      if (data?.content || data?.description) {
+        await handleAiQuotes(`${data.title}\n\n${data.content || data.description}`);
+      } else if (data?.quotes?.length) {
+        setExtractedQuotes(data.quotes);
+      }
+      toast({ title: "✅ ফেচ সফল" });
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message || "ফেচ ব্যর্থ", variant: "destructive" });
     }
     setUrlFetching(false);
   };
 
-  const loadImage = (src: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
+  const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
-  };
 
   const generateQRDataUrl = (text: string, size = 150): string => {
     const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = "#000000";
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = "#000";
     const cellSize = Math.floor(size / 21);
     for (let i = 0; i < 21; i++) {
       for (let j = 0; j < 21; j++) {
         const isCorner = (i < 7 && j < 7) || (i < 7 && j > 13) || (i > 13 && j < 7);
         const isBorder = isCorner && (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4));
         const hash = (text.charCodeAt(i % text.length) * (j + 1) + i * 31) % 3;
-        if (isBorder || (!isCorner && hash === 0)) {
-          ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
-        }
+        if (isBorder || (!isCorner && hash === 0)) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
       }
     }
     return canvas.toDataURL("image/png");
@@ -202,6 +280,73 @@ const PhotoCard = () => {
     return { W: size.w, H: size.h };
   };
 
+  // Draw built-in frame
+  const drawBuiltInFrame = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    const fc = textColor;
+    ctx.save();
+    switch (activeFrame) {
+      case "classic":
+        ctx.strokeStyle = fc; ctx.lineWidth = 12;
+        ctx.strokeRect(20, 20, W - 40, H - 40);
+        break;
+      case "rounded":
+        ctx.strokeStyle = fc; ctx.lineWidth = 8;
+        const r = 40;
+        ctx.beginPath();
+        ctx.moveTo(20 + r, 20); ctx.lineTo(W - 20 - r, 20);
+        ctx.quadraticCurveTo(W - 20, 20, W - 20, 20 + r);
+        ctx.lineTo(W - 20, H - 20 - r);
+        ctx.quadraticCurveTo(W - 20, H - 20, W - 20 - r, H - 20);
+        ctx.lineTo(20 + r, H - 20);
+        ctx.quadraticCurveTo(20, H - 20, 20, H - 20 - r);
+        ctx.lineTo(20, 20 + r);
+        ctx.quadraticCurveTo(20, 20, 20 + r, 20);
+        ctx.stroke();
+        break;
+      case "double":
+        ctx.strokeStyle = fc; ctx.lineWidth = 4;
+        ctx.strokeRect(12, 12, W - 24, H - 24);
+        ctx.strokeRect(24, 24, W - 48, H - 48);
+        break;
+      case "corner-accent":
+        ctx.strokeStyle = fc; ctx.lineWidth = 6;
+        const cs = 80;
+        // Top-left
+        ctx.beginPath(); ctx.moveTo(10, cs); ctx.lineTo(10, 10); ctx.lineTo(cs, 10); ctx.stroke();
+        // Top-right
+        ctx.beginPath(); ctx.moveTo(W - cs, 10); ctx.lineTo(W - 10, 10); ctx.lineTo(W - 10, cs); ctx.stroke();
+        // Bottom-left
+        ctx.beginPath(); ctx.moveTo(10, H - cs); ctx.lineTo(10, H - 10); ctx.lineTo(cs, H - 10); ctx.stroke();
+        // Bottom-right
+        ctx.beginPath(); ctx.moveTo(W - cs, H - 10); ctx.lineTo(W - 10, H - 10); ctx.lineTo(W - 10, H - cs); ctx.stroke();
+        break;
+      case "film-strip":
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 50, H); ctx.fillRect(W - 50, 0, 50, H);
+        ctx.fillStyle = "#fff";
+        for (let y = 15; y < H; y += 50) {
+          ctx.fillRect(10, y, 30, 30); ctx.fillRect(W - 40, y, 30, 30);
+        }
+        break;
+      case "ornate":
+        ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 3;
+        ctx.strokeRect(15, 15, W - 30, H - 30);
+        ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 1;
+        ctx.strokeRect(22, 22, W - 44, H - 44);
+        // Corner ornaments
+        const ocs = 60;
+        ctx.lineWidth = 2;
+        [
+          [15, 15], [W - 15 - ocs, 15], [15, H - 15 - ocs], [W - 15 - ocs, H - 15 - ocs]
+        ].forEach(([x, y]) => {
+          ctx.beginPath();
+          ctx.arc(x + ocs / 2, y + ocs / 2, ocs / 3, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        break;
+    }
+    ctx.restore();
+  };
+
   const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
     const { W, H } = getCanvasSize();
 
@@ -210,21 +355,22 @@ const PhotoCard = () => {
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
-        ctx.drawImage(bgImg, 0, 0, W, H);
+        // Cover-fit
+        const scale = Math.max(W / bgImg.width, H / bgImg.height);
+        const sw = bgImg.width * scale, sh = bgImg.height * scale;
+        ctx.drawImage(bgImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
         if (activeTemplate !== "minimal") {
-          ctx.fillStyle = "rgba(0,0,0,0.35)";
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
           ctx.fillRect(0, 0, W, H);
         }
       } catch {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
       }
     } else {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
     }
 
-    // Frame overlay
+    // Custom frame image overlay
     if (uploadedFrameImage) {
       try {
         const frameImg = await loadImage(uploadedFrameImage);
@@ -232,16 +378,24 @@ const PhotoCard = () => {
       } catch { /* continue */ }
     }
 
-    // Template drawing
+    // Built-in frame
+    if (activeFrame !== "none" && !uploadedFrameImage) {
+      drawBuiltInFrame(ctx, W, H);
+    }
+
+    // Template-specific drawing
     switch (activeTemplate) {
       case "news": drawNewsTemplate(ctx, W, H); break;
       case "quote": drawQuoteTemplate(ctx, W, H); break;
       case "event": drawEventTemplate(ctx, W, H); break;
       case "minimal": drawMinimalTemplate(ctx, W, H); break;
       case "breaking": drawBreakingTemplate(ctx, W, H); break;
+      case "elegant": drawElegantTemplate(ctx, W, H); break;
+      case "gradient": drawGradientTemplate(ctx, W, H); break;
+      case "bold": drawBoldTemplate(ctx, W, H); break;
     }
 
-    // Person image with offset controls
+    // Person image
     if (uploadedPersonImage) {
       try {
         const personImg = await loadImage(uploadedPersonImage);
@@ -266,245 +420,11 @@ const PhotoCard = () => {
       try {
         const qrDataUrl = generateQRDataUrl(qrUrl, 150);
         const qrImg = await loadImage(qrDataUrl);
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#fff";
         ctx.fillRect(W - 170, H - 170, 160, 160);
         ctx.drawImage(qrImg, W - 165, H - 165, 150, 150);
       } catch { /* failed */ }
     }
-  };
-
-  const drawNewsTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = textColor;
-    ctx.fillRect(0, 0, W, 8);
-    ctx.fillStyle = textColor;
-    ctx.fillRect(60, 60, 200, 45);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("সংবাদ", 160, 93);
-    if (!uploadedLogo) {
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 28px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 90);
-    }
-    ctx.textAlign = "left";
-    const maxW = uploadedPersonImage ? 580 : 900;
-    if (customTitle) {
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 52px 'Hind Siliguri', sans-serif";
-      const lines = wrapText(ctx, customTitle, maxW);
-      let y = 220;
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += 68; });
-    }
-    if (customQuote) {
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font = "36px 'Hind Siliguri', sans-serif";
-      const lines = wrapText(ctx, customQuote, maxW);
-      let y = customTitle ? 220 + wrapText(ctx, customTitle, maxW).length * 68 + 30 : 280;
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += 50; });
-    }
-    drawPersonInfo(ctx, W, H, "#ffffff");
-    ctx.fillStyle = textColor;
-    ctx.fillRect(0, H - 50, W, 50);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 22px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    const today = new Date();
-    const dateStr = `${today.getDate()} ${["জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টে", "অক্টো", "নভে", "ডিসে"][today.getMonth()]} ${today.getFullYear()}`;
-    ctx.fillText(`🔴 patuakhaliprobaho.com  ┃  ${dateStr}`, W / 2, H - 18);
-  };
-
-  const drawQuoteTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = "#f4c542";
-    ctx.font = "bold 200px serif";
-    ctx.textAlign = "left";
-    ctx.fillText("❝", 40, 230);
-    if (!uploadedLogo) {
-      ctx.fillStyle = textColor;
-      ctx.font = "bold 28px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 60);
-    }
-    const maxW = uploadedPersonImage ? 580 : 860;
-    if (customTitle) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
-      ctx.font = "bold 56px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customTitle, maxW);
-      let y = 340;
-      lines.forEach((line) => { ctx.fillText(line, 100, y); y += 74; });
-    }
-    if (customQuote) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.8)" : "#333";
-      ctx.font = "italic 40px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customQuote, maxW);
-      let y = customTitle ? 340 + wrapText(ctx, customTitle, maxW).length * 74 + 30 : 350;
-      lines.forEach((line) => { ctx.fillText(line, 100, y); y += 54; });
-    }
-    ctx.fillStyle = "#f4c542";
-    ctx.font = "bold 200px serif";
-    ctx.textAlign = "right";
-    ctx.fillText("❞", W - 40, H - 120);
-    drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : textColor);
-    ctx.fillStyle = textColor;
-    ctx.fillRect(0, H - 45, W, 45);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 20px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("🔴 patuakhaliprobaho.com", W / 2, H - 15);
-  };
-
-  const drawEventTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = textColor;
-    ctx.fillRect(0, 0, 12, H);
-    ctx.fillStyle = "#f4c542";
-    ctx.fillRect(40, 60, 220, 50);
-    ctx.fillStyle = "#000";
-    ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("📅 ইভেন্ট", 150, 96);
-    if (!uploadedLogo) {
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 92);
-    }
-    const maxW = uploadedPersonImage ? 560 : 880;
-    if (customTitle) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
-      ctx.font = "bold 50px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customTitle, maxW);
-      let y = 220;
-      lines.forEach((line) => { ctx.fillText(line, 60, y); y += 65; });
-    }
-    if (customQuote) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.85)" : "#444";
-      ctx.font = "36px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customQuote, maxW);
-      let y = customTitle ? 220 + wrapText(ctx, customTitle, maxW).length * 65 + 30 : 260;
-      lines.forEach((line) => { ctx.fillText(line, 60, y); y += 48; });
-    }
-    drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-    ctx.fillStyle = textColor;
-    ctx.fillRect(0, H - 50, W, 50);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 22px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("patuakhaliprobaho.com", W / 2, H - 18);
-  };
-
-  const drawMinimalTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    if (!uploadedBgImage && !fetchedImage) {
-      const grad = ctx.createLinearGradient(0, 0, W, H);
-      grad.addColorStop(0, "#f8f9fa");
-      grad.addColorStop(1, "#e9ecef");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
-    ctx.fillStyle = textColor;
-    ctx.fillRect(80, 200, 120, 4);
-    const maxW = uploadedPersonImage ? 560 : 860;
-    if (customTitle) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : "#222";
-      ctx.font = "bold 48px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customTitle, maxW);
-      let y = 280;
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += 64; });
-    }
-    if (customQuote) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.8)" : "#555";
-      ctx.font = "34px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customQuote, maxW);
-      let y = customTitle ? 280 + wrapText(ctx, customTitle, maxW).length * 64 + 25 : 290;
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += 46; });
-    }
-    drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-    if (!uploadedLogo) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : textColor;
-      ctx.font = "24px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, H - 30);
-    }
-  };
-
-  const drawBreakingTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = "#e74c3c";
-    ctx.fillRect(0, 0, W, 100);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 48px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("🔴 ব্রেকিং নিউজ 🔴", W / 2, 68);
-    if (!uploadedLogo) {
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText("পটুয়াখালী প্রবাহ", W - 40, 40);
-    }
-    const maxW = uploadedPersonImage ? 560 : 900;
-    if (customTitle) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "#ffffff" : "#222";
-      ctx.font = "bold 58px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customTitle, maxW);
-      let y = 230;
-      lines.forEach((line) => { ctx.fillText(line, 70, y); y += 74; });
-    }
-    if (customQuote) {
-      ctx.fillStyle = uploadedBgImage || fetchedImage ? "rgba(255,255,255,0.85)" : "#333";
-      ctx.font = "38px 'Hind Siliguri', sans-serif";
-      ctx.textAlign = "left";
-      const lines = wrapText(ctx, customQuote, maxW);
-      let y = customTitle ? 230 + wrapText(ctx, customTitle, maxW).length * 74 + 30 : 260;
-      lines.forEach((line) => { ctx.fillText(line, 70, y); y += 52; });
-    }
-    drawPersonInfo(ctx, W, H, uploadedBgImage || fetchedImage ? "#ffffff" : "#333");
-    ctx.fillStyle = "#e74c3c";
-    ctx.fillRect(0, H - 55, W, 55);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "center";
-    const today = new Date();
-    ctx.fillText(`patuakhaliprobaho.com  ┃  ${today.toLocaleDateString("bn-BD")}`, W / 2, H - 18);
-  };
-
-  const drawPersonInfo = (ctx: CanvasRenderingContext2D, W: number, H: number, color: string) => {
-    if (!quotePerson) return;
-    const textX = 100;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(textX, H - 220);
-    ctx.lineTo(textX + 200, H - 220);
-    ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.font = "bold 30px 'Hind Siliguri', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(quotePerson, textX, H - 180);
-    if (quoteDesignation) {
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 0.7;
-      ctx.font = "24px 'Hind Siliguri', sans-serif";
-      ctx.fillText(quoteDesignation, textX, H - 140);
-      ctx.globalAlpha = 1;
-    }
-  };
-
-  const generateCard = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { W, H } = getCanvasSize();
-    canvas.width = W;
-    canvas.height = H;
-    await drawTemplate(ctx);
-    setPreview(canvas.toDataURL("image/png"));
   };
 
   const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
@@ -522,12 +442,223 @@ const PhotoCard = () => {
     return lines;
   };
 
+  const hasBgImg = () => !!(uploadedBgImage || fetchedImage);
+  const txtColor = (fallback: string) => hasBgImg() ? "#ffffff" : fallback;
+
+  const drawSiteBranding = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    if (!uploadedLogo) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, 55);
+    }
+  };
+
+  const drawTitleAndQuote = (ctx: CanvasRenderingContext2D, W: number, H: number, startY: number, maxW: number) => {
+    const titleSize = titleFontSize;
+    const quoteSize = quoteFontSize;
+    let y = startY;
+
+    if (customTitle) {
+      ctx.fillStyle = txtColor(textColor);
+      ctx.font = `bold ${titleSize}px 'Hind Siliguri', sans-serif`;
+      ctx.textAlign = "left";
+      const lines = wrapText(ctx, customTitle, maxW);
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += titleSize + 16; });
+    }
+    if (customQuote) {
+      y += 10;
+      ctx.fillStyle = hasBgImg() ? "rgba(255,255,255,0.85)" : "#444";
+      ctx.font = `${quoteSize}px 'Hind Siliguri', sans-serif`;
+      ctx.textAlign = "left";
+      const lines = wrapText(ctx, customQuote, maxW);
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteSize + 14; });
+    }
+    return y;
+  };
+
+  const drawPersonInfo = (ctx: CanvasRenderingContext2D, W: number, H: number, color: string) => {
+    if (!quotePerson) return;
+    const textX = 100;
+    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(textX, H - 220); ctx.lineTo(textX + 200, H - 220); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = "bold 30px 'Hind Siliguri', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(quotePerson, textX, H - 180);
+    if (quoteDesignation) {
+      ctx.globalAlpha = 0.7;
+      ctx.font = "24px 'Hind Siliguri', sans-serif";
+      ctx.fillText(quoteDesignation, textX, H - 140);
+      ctx.globalAlpha = 1;
+    }
+  };
+
+  const drawFooter = (ctx: CanvasRenderingContext2D, W: number, H: number, bg: string = textColor) => {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, H - 50, W, 50);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 22px 'Hind Siliguri', sans-serif";
+    ctx.textAlign = "center";
+    const today = new Date();
+    const months = ["জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টে", "অক্টো", "নভে", "ডিসে"];
+    ctx.fillText(`🔴 patuakhaliprobaho.com  ┃  ${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`, W / 2, H - 18);
+  };
+
+  const maxW = () => uploadedPersonImage ? 580 : 900;
+
+  // ======== Template Renderers ========
+  const drawNewsTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.fillStyle = textColor; ctx.fillRect(0, 0, W, 8);
+    ctx.fillStyle = textColor; ctx.fillRect(60, 60, 200, 45);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 24px 'Hind Siliguri', sans-serif";
+    ctx.textAlign = "center"; ctx.fillText("সংবাদ", 160, 93);
+    drawSiteBranding(ctx, W, H);
+    ctx.textAlign = "left";
+    drawTitleAndQuote(ctx, W, H, 220, maxW());
+    drawPersonInfo(ctx, W, H, "#fff");
+    drawFooter(ctx, W, H);
+  };
+
+  const drawQuoteTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+    ctx.textAlign = "left"; ctx.fillText("❝", 40, 230);
+    drawSiteBranding(ctx, W, H);
+    drawTitleAndQuote(ctx, W, H, 340, maxW());
+    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+    ctx.textAlign = "right"; ctx.fillText("❞", W - 40, H - 120);
+    drawPersonInfo(ctx, W, H, txtColor(textColor));
+    drawFooter(ctx, W, H);
+  };
+
+  const drawEventTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.fillStyle = textColor; ctx.fillRect(0, 0, 12, H);
+    ctx.fillStyle = "#f4c542"; ctx.fillRect(40, 60, 220, 50);
+    ctx.fillStyle = "#000"; ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
+    ctx.textAlign = "center"; ctx.fillText("📅 ইভেন্ট", 150, 96);
+    drawSiteBranding(ctx, W, H);
+    drawTitleAndQuote(ctx, W, H, 220, maxW());
+    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    drawFooter(ctx, W, H);
+  };
+
+  const drawMinimalTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    if (!hasBgImg()) {
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, "#f8f9fa"); grad.addColorStop(1, "#e9ecef");
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.fillStyle = textColor; ctx.fillRect(80, 200, 120, 4);
+    drawTitleAndQuote(ctx, W, H, 280, maxW());
+    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    if (!uploadedLogo) {
+      ctx.fillStyle = txtColor(textColor);
+      ctx.font = "24px 'Hind Siliguri', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, H - 30);
+    }
+  };
+
+  const drawBreakingTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.fillStyle = "#e74c3c"; ctx.fillRect(0, 0, W, 100);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 48px 'Hind Siliguri', sans-serif";
+    ctx.textAlign = "center"; ctx.fillText("🔴 ব্রেকিং নিউজ 🔴", W / 2, 68);
+    drawSiteBranding(ctx, W, H);
+    drawTitleAndQuote(ctx, W, H, 230, maxW());
+    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    drawFooter(ctx, W, H, "#e74c3c");
+  };
+
+  const drawElegantTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    if (!hasBgImg()) {
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, "#0f0c29"); grad.addColorStop(0.5, "#302b63"); grad.addColorStop(1, "#24243e");
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    }
+    // Gold line accents
+    ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, 140); ctx.lineTo(W - 80, 140); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(80, H - 100); ctx.lineTo(W - 80, H - 100); ctx.stroke();
+    drawSiteBranding(ctx, W, H);
+    ctx.fillStyle = "#c4953a"; ctx.font = `bold ${titleFontSize}px 'Hind Siliguri', sans-serif`;
+    ctx.textAlign = "left";
+    let y = 220;
+    if (customTitle) {
+      const lines = wrapText(ctx, customTitle, maxW());
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += titleFontSize + 16; });
+    }
+    if (customQuote) {
+      y += 10;
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = `italic ${quoteFontSize}px 'Hind Siliguri', sans-serif`;
+      const lines = wrapText(ctx, customQuote, maxW());
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteFontSize + 14; });
+    }
+    drawPersonInfo(ctx, W, H, "#c4953a");
+    drawFooter(ctx, W, H, "#1a1a2e");
+  };
+
+  const drawGradientTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    if (!hasBgImg()) {
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, "#667eea"); grad.addColorStop(1, "#764ba2");
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    }
+    // Decorative circles
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(W * 0.8, H * 0.2, 200, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W * 0.2, H * 0.8, 150, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    drawSiteBranding(ctx, W, H);
+    drawTitleAndQuote(ctx, W, H, 250, maxW());
+    drawPersonInfo(ctx, W, H, "#fff");
+    drawFooter(ctx, W, H, "rgba(0,0,0,0.4)");
+  };
+
+  const drawBoldTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    if (!hasBgImg()) {
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    }
+    // Diagonal accent
+    ctx.fillStyle = textColor;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.4, 0); ctx.lineTo(0, H * 0.4); ctx.closePath(); ctx.fill();
+    drawSiteBranding(ctx, W, H);
+    const bigTitleSize = Math.min(titleFontSize + 10, 80);
+    ctx.fillStyle = "#fff"; ctx.font = `bold ${bigTitleSize}px 'Hind Siliguri', sans-serif`;
+    ctx.textAlign = "left";
+    let y = 300;
+    if (customTitle) {
+      const lines = wrapText(ctx, customTitle, maxW());
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += bigTitleSize + 16; });
+    }
+    if (customQuote) {
+      y += 10;
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.font = `${quoteFontSize}px 'Hind Siliguri', sans-serif`;
+      const lines = wrapText(ctx, customQuote, maxW());
+      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteFontSize + 14; });
+    }
+    drawPersonInfo(ctx, W, H, "#fff");
+    drawFooter(ctx, W, H, textColor);
+  };
+
+  // ======= Generate & Actions =======
+  const generateCard = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { W, H } = getCanvasSize();
+    canvas.width = W; canvas.height = H;
+    await drawTemplate(ctx);
+    setPreview(canvas.toDataURL("image/png"));
+  };
+
   const downloadCard = () => {
     if (!preview) return;
     const a = document.createElement("a");
-    a.href = preview;
-    a.download = `photocard-${Date.now()}.png`;
-    a.click();
+    a.href = preview; a.download = `photocard-${Date.now()}.png`; a.click();
   };
 
   const shareCard = async () => {
@@ -535,90 +666,96 @@ const PhotoCard = () => {
     try {
       const blob = await (await fetch(preview)).blob();
       const file = new File([blob], "photocard.png", { type: "image/png" });
-      if (navigator.share) {
-        await navigator.share({ title: customTitle, files: [file] });
-      } else downloadCard();
+      if (navigator.share) await navigator.share({ title: customTitle, files: [file] });
+      else downloadCard();
     } catch { downloadCard(); }
   };
 
-  // Touch handlers for person image drag
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // ======= Pointer-based Drag (touch + mouse) =======
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!uploadedPersonImage) return;
-    const touch = e.touches[0];
-    dragStartRef.current = { x: touch.clientX, y: touch.clientY, ox: personOffsetX, oy: personOffsetY };
-    setIsDragging(true);
-  };
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, startOx: personOffsetX, startOy: personOffsetY, active: true };
+  }, [uploadedPersonImage, personOffsetX, personOffsetY]);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !dragStartRef.current) return;
-    const touch = e.touches[0];
-    const dx = (touch.clientX - dragStartRef.current.x) / 2;
-    const dy = (touch.clientY - dragStartRef.current.y) / 2;
-    setPersonOffsetX(Math.max(0, Math.min(100, dragStartRef.current.ox + dx)));
-    setPersonOffsetY(Math.max(0, Math.min(100, dragStartRef.current.oy + dy)));
-  };
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current?.active) return;
+    e.preventDefault();
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
+    setPersonOffsetX(Math.max(0, Math.min(100, dragRef.current.startOx + dx)));
+    setPersonOffsetY(Math.max(0, Math.min(100, dragRef.current.startOy + dy)));
+  }, []);
 
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    dragStartRef.current = null;
-  };
+  const handlePointerUp = useCallback(() => {
+    if (dragRef.current) dragRef.current.active = false;
+  }, []);
+
+  // Auto-regenerate on drag end
+  useEffect(() => {
+    if (!dragRef.current?.active && preview && uploadedPersonImage) {
+      const timer = setTimeout(generateCard, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [personOffsetX, personOffsetY]);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">📸 কুইক ফটোকার্ড</h1>
+      <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6">
+        <h1 className="text-lg sm:text-2xl font-bold mb-3">📸 ফটোকার্ড জেনারেটর</h1>
 
-        {/* Template Selector */}
-        <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+        {/* Templates */}
+        <div className="flex gap-1.5 mb-2 overflow-x-auto pb-1.5 scrollbar-hide">
           {templates.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTemplate(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm whitespace-nowrap transition-colors ${
-                activeTemplate === t.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted border-border"
-              }`}
-            >
+            <button key={t.id} onClick={() => setActiveTemplate(t.id)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs whitespace-nowrap transition-all ${
+                activeTemplate === t.id ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card hover:bg-muted border-border"
+              }`}>
               <span>{t.icon}</span>{t.name}
             </button>
           ))}
         </div>
 
-        {/* Card Size Selector */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+        {/* Sizes */}
+        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
           {cardSizes.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSize(s.id)}
-              className={`px-3 py-1.5 rounded border text-xs whitespace-nowrap transition-colors ${
+            <button key={s.id} onClick={() => setActiveSize(s.id)}
+              className={`px-2.5 py-1 rounded border text-xs whitespace-nowrap ${
                 activeSize === s.id ? "bg-accent text-accent-foreground border-accent" : "bg-card hover:bg-muted border-border"
-              }`}
-            >
+              }`}>
               {s.name}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-          <div className="space-y-3 sm:space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
+          {/* Left: Controls */}
+          <div className="space-y-3">
             {/* URL Fetch */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">URL থেকে ফেচ করুন</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex gap-2">
-                  <Input placeholder="নিউজ URL পেস্ট করুন" value={fetchUrl} onChange={(e) => setFetchUrl(e.target.value)} className="flex-1" />
-                  <Button onClick={handleFetchUrl} disabled={urlFetching || !fetchUrl} variant="outline" size="sm">
-                    <Link2 className={`w-4 h-4 mr-1 ${urlFetching ? "animate-spin" : ""}`} />ফেচ
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">🔗 URL ফেচ</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1 space-y-2">
+                <div className="flex gap-1.5">
+                  <Input placeholder="নিউজ URL পেস্ট করুন" value={fetchUrl} onChange={(e) => setFetchUrl(e.target.value)} className="flex-1 h-9 text-sm" />
+                  <Button onClick={handleFetchUrl} disabled={urlFetching || !fetchUrl} variant="outline" size="sm" className="h-9">
+                    <Link2 className={`w-3.5 h-3.5 mr-1 ${urlFetching ? "animate-spin" : ""}`} />ফেচ
                   </Button>
                 </div>
                 {extractedQuotes.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">❝ AI কোটেশন ({extractedQuotes.length}টি):</p>
-                    <div className="max-h-28 overflow-y-auto space-y-1">
+                    <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> AI কোটেশন ({extractedQuotes.length}টি):
+                    </p>
+                    <div className="max-h-24 overflow-y-auto space-y-1">
                       {extractedQuotes.map((q, i) => (
                         <button key={i} onClick={() => { setCustomQuote(q); toast({ title: "কোটেশন যুক্ত হয়েছে" }); }}
-                          className="w-full text-left text-xs p-1.5 rounded border bg-accent/10 hover:bg-accent/20 transition-colors leading-tight">
-                          ❝ {q.substring(0, 120)}{q.length > 120 ? "…" : ""} ❞
+                          className="w-full text-left text-[11px] p-1.5 rounded border bg-accent/10 hover:bg-accent/20 transition-colors leading-tight">
+                          ❝ {q.substring(0, 100)}{q.length > 100 ? "…" : ""} ❞
                         </button>
                       ))}
                     </div>
@@ -627,162 +764,186 @@ const PhotoCard = () => {
               </CardContent>
             </Card>
 
-            {/* Image Uploads */}
+            {/* Image Uploads - Compact */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">📷 ছবি আপলোড</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {/* Background */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">ব্যাকগ্রাউন্ড ছবি</label>
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">📷 ছবি ও ফ্রেম</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1 space-y-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   <input ref={bgInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedBgImage)} />
-                  <div className="flex gap-2 items-center">
-                    <Button onClick={() => bgInputRef.current?.click()} variant="outline" size="sm" className="flex-1">
-                      <Upload className="w-4 h-4 mr-1" />ব্যাকগ্রাউন্ড
-                    </Button>
-                    {uploadedBgImage && <Button onClick={() => setUploadedBgImage(null)} variant="ghost" size="icon" className="h-8 w-8"><X className="w-4 h-4" /></Button>}
-                  </div>
-                  {uploadedBgImage && <img src={uploadedBgImage} alt="bg" className="mt-2 h-16 rounded border object-cover" />}
-                </div>
-
-                {/* Frame */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">কাস্টম ফ্রেম (PNG)</label>
-                  <input ref={frameInputRef} type="file" accept="image/png,image/webp" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedFrameImage)} />
-                  <div className="flex gap-2 items-center">
-                    <Button onClick={() => frameInputRef.current?.click()} variant="outline" size="sm" className="flex-1">
-                      <ImagePlus className="w-4 h-4 mr-1" />ফ্রেম
-                    </Button>
-                    {uploadedFrameImage && <Button onClick={() => setUploadedFrameImage(null)} variant="ghost" size="icon" className="h-8 w-8"><X className="w-4 h-4" /></Button>}
-                  </div>
-                  {uploadedFrameImage && <img src={uploadedFrameImage} alt="frame" className="mt-2 h-16 rounded border object-cover" />}
-                </div>
-
-                {/* Logo */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">লোগো</label>
-                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedLogo)} />
-                  <div className="flex gap-2 items-center">
-                    <Button onClick={() => logoInputRef.current?.click()} variant="outline" size="sm" className="flex-1">
-                      <Upload className="w-4 h-4 mr-1" />লোগো আপলোড
-                    </Button>
-                    {uploadedLogo && <Button onClick={() => setUploadedLogo(null)} variant="ghost" size="icon" className="h-8 w-8"><X className="w-4 h-4" /></Button>}
-                  </div>
-                  {uploadedLogo && <img src={uploadedLogo} alt="logo" className="mt-2 h-12 rounded border object-contain" />}
-                </div>
-
-                {/* Person with bg removal + move controls */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">ব্যক্তির ছবি</label>
                   <input ref={personInputRef} type="file" accept="image/*" className="hidden" onChange={handlePersonUpload} />
-                  <div className="flex gap-2 items-center flex-wrap">
-                    <Button onClick={() => personInputRef.current?.click()} variant="outline" size="sm" className="flex-1">
-                      <ImagePlus className="w-4 h-4 mr-1" />ব্যক্তির ছবি
-                    </Button>
-                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                      <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)} className="rounded" />
-                      BG রিমুভ
-                    </label>
-                    {uploadedPersonImage && <Button onClick={() => setUploadedPersonImage(null)} variant="ghost" size="icon" className="h-8 w-8"><X className="w-4 h-4" /></Button>}
-                  </div>
-                  {uploadedPersonImage && (
-                    <div className="mt-2 space-y-2">
-                      <img src={uploadedPersonImage} alt="person" className="h-16 rounded border object-cover" />
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <label className="text-[10px] w-6">X:</label>
-                          <input type="range" min="0" max="100" value={personOffsetX} onChange={(e) => setPersonOffsetX(Number(e.target.value))} className="flex-1" />
-                          <span className="text-[10px] w-8">{personOffsetX}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 opacity-0" />
-                          <label className="text-[10px] w-6">Y:</label>
-                          <input type="range" min="0" max="100" value={personOffsetY} onChange={(e) => setPersonOffsetY(Number(e.target.value))} className="flex-1" />
-                          <span className="text-[10px] w-8">{personOffsetY}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Move className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 opacity-0" />
-                          <label className="text-[10px] w-6">সাইজ:</label>
-                          <input type="range" min="10" max="100" value={personSize} onChange={(e) => setPersonSize(Number(e.target.value))} className="flex-1" />
-                          <span className="text-[10px] w-8">{personSize}%</span>
-                        </div>
-                      </div>
+                  <input ref={frameInputRef} type="file" accept="image/png,image/webp" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedFrameImage)} />
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, setUploadedLogo)} />
+
+                  <Button onClick={() => bgInputRef.current?.click()} variant="outline" size="sm" className="h-8 text-xs w-full">
+                    <Upload className="w-3 h-3 mr-1" />ব্যাকগ্রাউন্ড
+                  </Button>
+                  <Button onClick={() => personInputRef.current?.click()} variant="outline" size="sm" className="h-8 text-xs w-full">
+                    <ImagePlus className="w-3 h-3 mr-1" />ব্যক্তি ছবি
+                  </Button>
+                  <Button onClick={() => frameInputRef.current?.click()} variant="outline" size="sm" className="h-8 text-xs w-full">
+                    <ImagePlus className="w-3 h-3 mr-1" />কাস্টম ফ্রেম
+                  </Button>
+                  <Button onClick={() => logoInputRef.current?.click()} variant="outline" size="sm" className="h-8 text-xs w-full">
+                    <Upload className="w-3 h-3 mr-1" />লোগো
+                  </Button>
+                </div>
+
+                {/* Uploaded previews */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {uploadedBgImage && (
+                    <div className="relative">
+                      <img src={uploadedBgImage} alt="bg" className="h-10 rounded border object-cover" />
+                      <button onClick={() => setUploadedBgImage(null)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]">✕</button>
                     </div>
                   )}
+                  {uploadedPersonImage && (
+                    <div className="relative">
+                      <img src={uploadedPersonImage} alt="person" className="h-10 rounded border object-cover" />
+                      <button onClick={() => setUploadedPersonImage(null)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]">✕</button>
+                    </div>
+                  )}
+                  {uploadedFrameImage && (
+                    <div className="relative">
+                      <img src={uploadedFrameImage} alt="frame" className="h-10 rounded border object-cover" />
+                      <button onClick={() => setUploadedFrameImage(null)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]">✕</button>
+                    </div>
+                  )}
+                  {uploadedLogo && (
+                    <div className="relative">
+                      <img src={uploadedLogo} alt="logo" className="h-10 rounded border object-contain" />
+                      <button onClick={() => setUploadedLogo(null)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]">✕</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Person image controls */}
+                {uploadedPersonImage && (
+                  <div className="space-y-1.5 bg-muted/50 rounded p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium">ছবি কন্ট্রোল</span>
+                      <Button onClick={removeBackground} disabled={removingBg} variant="outline" size="sm" className="h-6 text-[10px] px-2">
+                        {removingBg ? "⏳ রিমুভ হচ্ছে..." : "🪄 BG রিমুভ"}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">X পজিশন</label>
+                        <Slider value={[personOffsetX]} onValueChange={([v]) => setPersonOffsetX(v)} min={0} max={100} step={1} className="mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Y পজিশন</label>
+                        <Slider value={[personOffsetY]} onValueChange={([v]) => setPersonOffsetY(v)} min={0} max={100} step={1} className="mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">সাইজ</label>
+                        <Slider value={[personSize]} onValueChange={([v]) => setPersonSize(v)} min={10} max={100} step={1} className="mt-1" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Built-in frames */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">বিল্ট-ইন ফ্রেম</label>
+                  <div className="flex gap-1 flex-wrap">
+                    {builtInFrames.map((f) => (
+                      <button key={f.id} onClick={() => setActiveFrame(f.id)}
+                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                          activeFrame === f.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted border-border"
+                        }`}>
+                        {f.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* News Select */}
+            {/* Text Customization */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">নিউজ সিলেক্ট করুন</CardTitle></CardHeader>
-              <CardContent className="max-h-36 overflow-y-auto space-y-1">
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">✍️ টেক্সট কাস্টমাইজ</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1 space-y-2">
+                <Input placeholder="শিরোনাম" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} className="h-9 text-sm" />
+                <Textarea placeholder="কোটেশন / বিস্তারিত (ঐচ্ছিক)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={2} className="text-sm" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input placeholder="ব্যক্তির নাম" value={quotePerson} onChange={(e) => setQuotePerson(e.target.value)} className="h-8 text-xs" />
+                  <Input placeholder="পদবী" value={quoteDesignation} onChange={(e) => setQuoteDesignation(e.target.value)} className="h-8 text-xs" />
+                </div>
+
+                {/* Font size controls */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground flex items-center gap-1"><Type className="w-3 h-3" /> শিরোনাম সাইজ: {titleFontSize}px</label>
+                    <Slider value={[titleFontSize]} onValueChange={([v]) => setTitleFontSize(v)} min={24} max={80} step={2} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground flex items-center gap-1"><Type className="w-3 h-3" /> কোটেশন সাইজ: {quoteFontSize}px</label>
+                    <Slider value={[quoteFontSize]} onValueChange={([v]) => setQuoteFontSize(v)} min={16} max={60} step={2} className="mt-1" />
+                  </div>
+                </div>
+
+                {/* Colors & QR */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    <label className="text-[10px]">BG:</label>
+                    <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-[10px]">টেক্সট:</label>
+                    <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input type="checkbox" checked={showQr} onChange={(e) => setShowQr(e.target.checked)} className="rounded" />
+                    <QrCode className="w-3.5 h-3.5" /> QR
+                  </label>
+                </div>
+                {showQr && <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="h-8 text-xs" />}
+
+                <Button onClick={generateCard} className="w-full h-10">
+                  <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Post Select */}
+            <Card>
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">নিউজ সিলেক্ট</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1 max-h-32 overflow-y-auto space-y-1">
                 {posts.map((post) => (
                   <button key={post.id} onClick={() => selectPost(post)}
-                    className={`w-full text-right p-2 rounded text-xs border transition-colors ${selectedPost?.id === post.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}>
+                    className={`w-full text-left p-1.5 rounded text-[11px] border transition-colors ${selectedPost?.id === post.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}>
                     {post.title}
                   </button>
                 ))}
               </CardContent>
             </Card>
-
-            {/* Customize */}
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">কাস্টমাইজ</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <Input placeholder="শিরোনাম / কোটেশন" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} />
-                <Textarea placeholder="বিস্তারিত লেখা (ঐচ্ছিক)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={2} />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="ব্যক্তির নাম" value={quotePerson} onChange={(e) => setQuotePerson(e.target.value)} />
-                  <Input placeholder="পদবী/পরিচয়" value={quoteDesignation} onChange={(e) => setQuoteDesignation(e.target.value)} />
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-1">
-                    <label className="text-xs">ব্যাকগ্রাউন্ড:</label>
-                    <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <label className="text-xs">টেক্সট রঙ:</label>
-                    <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                  </div>
-                </div>
-
-                {/* QR Code */}
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={showQr} onChange={(e) => setShowQr(e.target.checked)} className="rounded" />
-                    <QrCode className="w-4 h-4" /> QR কোড
-                  </label>
-                  {showQr && (
-                    <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="flex-1 text-xs h-8" />
-                  )}
-                </div>
-
-                <Button onClick={generateCard} className="w-full">
-                  <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
-                </Button>
-              </CardContent>
-            </Card>
           </div>
 
+          {/* Right: Preview */}
           <div>
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">প্রিভিউ</CardTitle></CardHeader>
-              <CardContent>
+            <Card className="sticky top-4">
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">প্রিভিউ</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1">
                 <canvas ref={canvasRef} className="hidden" />
                 {preview ? (
-                  <div className="space-y-3"
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
-                  >
-                    <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg" />
-                    {uploadedPersonImage && isDragging && (
-                      <p className="text-xs text-center text-muted-foreground">🔄 ড্র্যাগ করে ছবি সরান</p>
-                    )}
+                  <div className="space-y-2">
+                    <div
+                      ref={previewContainerRef}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      className="relative touch-none select-none cursor-grab active:cursor-grabbing"
+                    >
+                      <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
+                      {uploadedPersonImage && (
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
+                          👆 ড্র্যাগ করে ছবি সরান
+                        </div>
+                      )}
+                    </div>
                     <div className="flex gap-2">
-                      <Button onClick={downloadCard} className="flex-1" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
-                      <Button onClick={shareCard} variant="outline" className="flex-1" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
+                      <Button onClick={downloadCard} className="flex-1 h-9" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
+                      <Button onClick={shareCard} variant="outline" className="flex-1 h-9" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
                     </div>
                   </div>
                 ) : (
