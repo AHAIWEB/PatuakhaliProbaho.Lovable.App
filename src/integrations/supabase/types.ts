@@ -247,6 +247,57 @@ export type Database = {
         }
         Relationships: []
       }
+      scrape_sources: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          district: string | null
+          division: string | null
+          id: string
+          is_active: boolean | null
+          last_error: string | null
+          last_scraped_at: string | null
+          name: string
+          scrape_interval_minutes: number | null
+          selector_config: Json | null
+          source_category: string | null
+          upazila: string | null
+          url: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          district?: string | null
+          division?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_error?: string | null
+          last_scraped_at?: string | null
+          name: string
+          scrape_interval_minutes?: number | null
+          selector_config?: Json | null
+          source_category?: string | null
+          upazila?: string | null
+          url: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          district?: string | null
+          division?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_error?: string | null
+          last_scraped_at?: string | null
+          name?: string
+          scrape_interval_minutes?: number | null
+          selector_config?: Json | null
+          source_category?: string | null
+          upazila?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
