@@ -10,7 +10,7 @@ const TopBar = () => {
   });
 
   return (
-    <div className="bg-topbar text-topbar-foreground text-xs py-1.5">
+    <div className="bg-topbar text-topbar-foreground text-[10px] sm:text-xs py-1 sm:py-1.5">
       <div className="container mx-auto flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <Clock className="h-3 w-3" />
