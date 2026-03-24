@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Post = Tables<"posts">;
@@ -39,10 +39,13 @@ const Admin = () => {
   const [feedName, setFeedName] = useState("");
   const [feedDivision, setFeedDivision] = useState("");
   const [feedCategory, setFeedCategory] = useState("general");
+  const [feedDistrict, setFeedDistrict] = useState("");
+  const [feedUpazila, setFeedUpazila] = useState("");
 
   // Category form
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
+  const [newCatParent, setNewCatParent] = useState("");
 
   // Edit post
   const [editingPost, setEditingPost] = useState<Post | null>(null);
@@ -54,6 +57,9 @@ const Admin = () => {
   const [postSearch, setPostSearch] = useState("");
   const [postPage, setPostPage] = useState(0);
   const postsPerPage = 50;
+
+  // RSS fetch progress
+  const [fetchProgress, setFetchProgress] = useState("");
 
   useEffect(() => {
     if (!authLoading && (!user || !["admin", "editor", "reporter"].includes(userRole || ""))) {
@@ -74,14 +80,11 @@ const Admin = () => {
     if (catsRes.data) setCategories(catsRes.data);
   };
 
-  // Auto-fetch from URL
   const handleFetchUrl = async () => {
     if (!quickUrl) return;
     setUrlFetching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("scrape-url", {
-        body: { url: quickUrl },
-      });
+      const { data, error } = await supabase.functions.invoke("scrape-url", { body: { url: quickUrl } });
       if (error) throw error;
       if (data?.title) setQuickTitle(data.title);
       if (data?.description) setQuickContent(data.description);
@@ -121,21 +124,39 @@ const Admin = () => {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "RSS ফিড যুক্ত হয়েছে" });
-      setFeedUrl(""); setFeedName(""); setFeedDivision("");
+      setFeedUrl(""); setFeedName(""); setFeedDivision(""); setFeedDistrict(""); setFeedUpazila("");
       fetchData();
     }
   };
 
   const handleFetchRSS = async () => {
     setLoading(true);
-    toast({ title: "ফেচিং...", description: "RSS ফিড থেকে নিউজ ফেচ করা হচ্ছে" });
-    const { data, error } = await supabase.functions.invoke("fetch-rss");
-    if (error) {
-      toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "সফল", description: `${data?.fetched || 0}টি নিউজ ফেচ হয়েছে` });
-      fetchData();
+    let totalFetched = 0;
+    let offset = 0;
+    const batchSize = 15;
+
+    // Fetch in batches to avoid timeout
+    for (let batch = 0; batch < 15; batch++) {
+      setFetchProgress(`ব্যাচ ${batch + 1} প্রসেসিং... (${totalFetched} নিউজ ফেচ হয়েছে)`);
+      const { data, error } = await supabase.functions.invoke("fetch-rss", {
+        body: { batchSize, offset },
+      });
+
+      if (error) {
+        toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
+        break;
+      }
+
+      totalFetched += data?.fetched || 0;
+      offset = data?.nextOffset || offset + batchSize;
+
+      // If processed fewer feeds than batch size, we're done
+      if ((data?.processedFeeds || 0) < batchSize) break;
     }
+
+    setFetchProgress("");
+    toast({ title: "সফল", description: `মোট ${totalFetched}টি নিউজ ফেচ হয়েছে` });
+    fetchData();
     setLoading(false);
   };
 
@@ -166,17 +187,18 @@ const Admin = () => {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from("categories").insert({ name: newCatName, slug: newCatSlug });
+    const { error } = await supabase.from("categories").insert({
+      name: newCatName, slug: newCatSlug, parent_id: newCatParent || null,
+    });
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "ক্যাটাগরি যুক্ত হয়েছে" });
-      setNewCatName(""); setNewCatSlug("");
+      setNewCatName(""); setNewCatSlug(""); setNewCatParent("");
       fetchData();
     }
   };
 
-  // Edit post handlers
   const startEdit = (post: Post) => {
     setEditingPost(post);
     setEditTitle(post.title);
@@ -199,7 +221,6 @@ const Admin = () => {
     }
   };
 
-  // Quick assign category to post
   const quickAssignCategory = async (postId: string, categoryId: string) => {
     await supabase.from("posts").update({ category_id: categoryId || null }).eq("id", postId);
     fetchData();
@@ -211,6 +232,53 @@ const Admin = () => {
   );
   const pagedPosts = filteredPosts.slice(postPage * postsPerPage, (postPage + 1) * postsPerPage);
 
+  // District/Upazila data for RSS form
+  const divisionDistricts: Record<string, { name: string; upazilas: string[] }[]> = {
+    barisal: [
+      { name: "বরিশাল", upazilas: ["বরিশাল সদর", "বাবুগঞ্জ", "বাকেরগঞ্জ", "বানারীপাড়া", "গৌরনদী", "আগৈলঝাড়া", "মেহেন্দিগঞ্জ", "মুলাদী", "হিজলা", "উজিরপুর"] },
+      { name: "পটুয়াখালী", upazilas: ["পটুয়াখালী সদর", "বাউফল", "দশমিনা", "দুমকি", "গলাচিপা", "কলাপাড়া", "মির্জাগঞ্জ", "রাঙ্গাবালী"] },
+      { name: "ভোলা", upazilas: ["ভোলা সদর", "বোরহানউদ্দিন", "চরফ্যাশন", "দৌলতখান", "লালমোহন", "মনপুরা", "তজুমুদ্দিন"] },
+      { name: "পিরোজপুর", upazilas: ["পিরোজপুর সদর", "ভাণ্ডারিয়া", "কাউখালী", "মঠবাড়িয়া", "নাজিরপুর", "নেছারাবাদ", "ইন্দুরকানী"] },
+      { name: "ঝালকাঠি", upazilas: ["ঝালকাঠি সদর", "কাঠালিয়া", "নলছিটি", "রাজাপুর"] },
+      { name: "বরগুনা", upazilas: ["বরগুনা সদর", "আমতলী", "বামনা", "বেতাগী", "পাথরঘাটা", "তালতলী"] },
+    ],
+    dhaka: [
+      { name: "ঢাকা", upazilas: ["ঢাকা সদর", "সাভার", "ধামরাই", "কেরানীগঞ্জ", "নবাবগঞ্জ", "দোহার"] },
+      { name: "গাজীপুর", upazilas: ["গাজীপুর সদর", "কালীগঞ্জ", "কালিয়াকৈর", "কাপাসিয়া", "শ্রীপুর"] },
+      { name: "নারায়ণগঞ্জ", upazilas: ["নারায়ণগঞ্জ সদর", "আড়াইহাজার", "বন্দর", "রূপগঞ্জ", "সোনারগাঁ"] },
+      { name: "মানিকগঞ্জ", upazilas: ["মানিকগঞ্জ সদর", "ঘিওর", "হরিরামপুর", "সাটুরিয়া", "শিবালয়", "সিংগাইর", "দৌলতপুর"] },
+    ],
+    chittagong: [
+      { name: "চট্টগ্রাম", upazilas: ["চট্টগ্রাম সদর", "সীতাকুণ্ড", "মিরসরাই", "পটিয়া", "সন্দ্বীপ", "বাঁশখালী", "আনোয়ারা"] },
+      { name: "কক্সবাজার", upazilas: ["কক্সবাজার সদর", "চকরিয়া", "কুতুবদিয়া", "মহেশখালী", "রামু", "টেকনাফ", "উখিয়া", "পেকুয়া"] },
+      { name: "কুমিল্লা", upazilas: ["কুমিল্লা সদর", "দেবিদ্বার", "বরুড়া", "চান্দিনা", "চৌদ্দগ্রাম", "দাউদকান্দি", "হোমনা", "লাকসাম"] },
+    ],
+    sylhet: [
+      { name: "সিলেট", upazilas: ["সিলেট সদর", "বিশ্বনাথ", "গোলাপগঞ্জ", "জৈন্তাপুর", "কোম্পানীগঞ্জ"] },
+      { name: "মৌলভীবাজার", upazilas: ["মৌলভীবাজার সদর", "কমলগঞ্জ", "কুলাউড়া", "রাজনগর", "শ্রীমঙ্গল", "বড়লেখা", "জুড়ী"] },
+      { name: "হবিগঞ্জ", upazilas: ["হবিগঞ্জ সদর", "বাহুবল", "চুনারুঘাট", "লাখাই", "মাধবপুর", "নবীগঞ্জ"] },
+    ],
+    rajshahi: [
+      { name: "রাজশাহী", upazilas: ["রাজশাহী সদর", "বাগমারা", "চারঘাট", "দুর্গাপুর", "গোদাগাড়ী", "মোহনপুর", "পবা", "পুঠিয়া", "তানোর"] },
+      { name: "বগুড়া", upazilas: ["বগুড়া সদর", "আদমদিঘী", "দুপচাঁচিয়া", "গাবতলী", "কাহালু", "নন্দীগ্রাম", "সারিয়াকান্দি", "শাজাহানপুর", "শেরপুর", "শিবগঞ্জ", "সোনাতলা"] },
+    ],
+    rangpur: [
+      { name: "রংপুর", upazilas: ["রংপুর সদর", "বদরগঞ্জ", "গঙ্গাচড়া", "কাউনিয়া", "মিঠাপুকুর", "পীরগঞ্জ", "পীরগাছা", "তারাগঞ্জ"] },
+      { name: "দিনাজপুর", upazilas: ["দিনাজপুর সদর", "বিরামপুর", "বীরগঞ্জ", "বোচাগঞ্জ", "চিরিরবন্দর", "ফুলবাড়ী", "ঘোড়াঘাট", "হাকিমপুর"] },
+    ],
+    khulna: [
+      { name: "খুলনা", upazilas: ["খুলনা সদর", "বটিয়াঘাটা", "ডুমুরিয়া", "দীঘলিয়া", "কয়রা", "পাইকগাছা", "ফুলতলা", "রূপসা", "তেরখাদা"] },
+      { name: "যশোর", upazilas: ["যশোর সদর", "অভয়নগর", "বাঘারপাড়া", "চৌগাছা", "ঝিকরগাছা", "কেশবপুর", "মণিরামপুর", "শার্শা"] },
+    ],
+    mymensingh: [
+      { name: "ময়মনসিংহ", upazilas: ["ময়মনসিংহ সদর", "ভালুকা", "ফুলবাড়ীয়া", "গফরগাঁও", "গৌরীপুর", "হালুয়াঘাট", "ঈশ্বরগঞ্জ", "মুক্তাগাছা", "নান্দাইল", "ত্রিশাল"] },
+      { name: "জামালপুর", upazilas: ["জামালপুর সদর", "বকশীগঞ্জ", "দেওয়ানগঞ্জ", "ইসলামপুর", "মাদারগঞ্জ", "মেলান্দহ", "সরিষাবাড়ী"] },
+    ],
+  };
+
+  const currentDistricts = feedDivision ? divisionDistricts[feedDivision] || [] : [];
+  const currentUpazilas = feedDistrict ? currentDistricts.find((d) => d.name === feedDistrict)?.upazilas || [] : [];
+
   if (authLoading) return <div className="flex items-center justify-center min-h-screen">লোড হচ্ছে...</div>;
 
   return (
@@ -218,8 +286,11 @@ const Admin = () => {
       <div className="bg-primary text-primary-foreground p-4">
         <div className="container mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold">📋 এডমিন প্যানেল</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             <span className="text-sm opacity-80">রোল: {userRole}</span>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/photo-card")}>
+              <Camera className="w-4 h-4 mr-1" />ফটোকার্ড
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => navigate("/")}>হোমপেজ</Button>
           </div>
         </div>
@@ -232,6 +303,7 @@ const Admin = () => {
             <TabsTrigger value="posts"><Edit className="w-4 h-4 mr-1" />সকল পোস্ট ({posts.length})</TabsTrigger>
             <TabsTrigger value="rss"><Rss className="w-4 h-4 mr-1" />RSS ম্যানেজার</TabsTrigger>
             <TabsTrigger value="categories"><Tag className="w-4 h-4 mr-1" />ক্যাটাগরি</TabsTrigger>
+            <TabsTrigger value="photocard"><Camera className="w-4 h-4 mr-1" />ফটোকার্ড</TabsTrigger>
           </TabsList>
 
           {/* Quick Post Tab */}
@@ -272,7 +344,6 @@ const Admin = () => {
 
           {/* All Posts Tab */}
           <TabsContent value="posts">
-            {/* Edit Modal */}
             {editingPost && (
               <Card className="mb-4 border-accent">
                 <CardHeader>
@@ -304,11 +375,9 @@ const Admin = () => {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <CardTitle>সকল পোস্ট ({filteredPosts.length})</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
-                    </div>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="সার্চ..." className="pl-8 w-48" value={postSearch} onChange={(e) => { setPostSearch(e.target.value); setPostPage(0); }} />
                   </div>
                 </div>
               </CardHeader>
@@ -328,11 +397,7 @@ const Admin = () => {
                       <TableRow key={post.id}>
                         <TableCell className="max-w-[180px] truncate font-medium">{post.title}</TableCell>
                         <TableCell>
-                          <select
-                            className="text-xs border rounded p-1 bg-background w-24"
-                            value={post.category_id || ""}
-                            onChange={(e) => quickAssignCategory(post.id, e.target.value)}
-                          >
+                          <select className="text-xs border rounded p-1 bg-background w-24" value={post.category_id || ""} onChange={(e) => quickAssignCategory(post.id, e.target.value)}>
                             <option value="">—</option>
                             {categories.map((c) => (
                               <option key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</option>
@@ -366,9 +431,7 @@ const Admin = () => {
                 {filteredPosts.length > postsPerPage && (
                   <div className="flex gap-2 mt-4 justify-center">
                     <Button variant="outline" size="sm" disabled={postPage === 0} onClick={() => setPostPage((p) => p - 1)}>আগের</Button>
-                    <span className="text-sm text-muted-foreground self-center">
-                      {postPage + 1} / {Math.ceil(filteredPosts.length / postsPerPage)}
-                    </span>
+                    <span className="text-sm text-muted-foreground self-center">{postPage + 1} / {Math.ceil(filteredPosts.length / postsPerPage)}</span>
                     <Button variant="outline" size="sm" disabled={(postPage + 1) * postsPerPage >= filteredPosts.length} onClick={() => setPostPage((p) => p + 1)}>পরের</Button>
                   </div>
                 )}
@@ -381,18 +444,23 @@ const Admin = () => {
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <CardTitle>RSS ফিড ম্যানেজার ({feeds.length})</CardTitle>
-                    <Button onClick={handleFetchRSS} disabled={loading}>
-                      <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />এখনই ফেচ করুন
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {fetchProgress && <span className="text-xs text-muted-foreground">{fetchProgress}</span>}
+                      <Button onClick={handleFetchRSS} disabled={loading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />এখনই ফেচ করুন
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleAddFeed} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                     <Input placeholder="RSS URL *" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required />
                     <Input placeholder="নাম *" value={feedName} onChange={(e) => setFeedName(e.target.value)} required />
-                    <select className="border rounded-md p-2 bg-background" value={feedDivision} onChange={(e) => setFeedDivision(e.target.value)}>
+                    
+                    {/* Division dropdown */}
+                    <select className="border rounded-md p-2 bg-background" value={feedDivision} onChange={(e) => { setFeedDivision(e.target.value); setFeedDistrict(""); setFeedUpazila(""); }}>
                       <option value="">বিভাগ নির্বাচন করুন</option>
                       <option value="barisal">বরিশাল</option>
                       <option value="dhaka">ঢাকা</option>
@@ -403,6 +471,24 @@ const Admin = () => {
                       <option value="khulna">খুলনা</option>
                       <option value="mymensingh">ময়মনসিংহ</option>
                     </select>
+
+                    {/* District dropdown */}
+                    <select className="border rounded-md p-2 bg-background" value={feedDistrict} onChange={(e) => { setFeedDistrict(e.target.value); setFeedUpazila(""); }} disabled={!feedDivision}>
+                      <option value="">জেলা নির্বাচন করুন</option>
+                      {currentDistricts.map((d) => (
+                        <option key={d.name} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+
+                    {/* Upazila dropdown */}
+                    <select className="border rounded-md p-2 bg-background" value={feedUpazila} onChange={(e) => setFeedUpazila(e.target.value)} disabled={!feedDistrict}>
+                      <option value="">উপজেলা নির্বাচন করুন</option>
+                      {currentUpazilas.map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+
+                    {/* Category dropdown */}
                     <select className="border rounded-md p-2 bg-background" value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)}>
                       <option value="general">সাধারণ</option>
                       <option value="national">জাতীয়</option>
@@ -416,6 +502,10 @@ const Admin = () => {
                       <option value="health">স্বাস্থ্য</option>
                       <option value="economy">অর্থনীতি</option>
                       <option value="lifestyle">লাইফস্টাইল</option>
+                      <option value="politics">রাজনীতি</option>
+                      <option value="world">বিশ্ব</option>
+                      <option value="religion">ধর্ম</option>
+                      <option value="travel">ভ্রমণ</option>
                     </select>
                     <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />ফিড যুক্ত করুন</Button>
                   </form>
@@ -426,6 +516,7 @@ const Admin = () => {
                         <TableHead>নাম</TableHead>
                         <TableHead>URL</TableHead>
                         <TableHead>বিভাগ</TableHead>
+                        <TableHead>ক্যাটাগরি</TableHead>
                         <TableHead>শেষ ফেচ</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
@@ -436,6 +527,7 @@ const Admin = () => {
                           <TableCell className="font-medium text-sm">{feed.name}</TableCell>
                           <TableCell className="max-w-[150px] truncate text-xs">{feed.url}</TableCell>
                           <TableCell className="text-xs">{feed.division || "-"}</TableCell>
+                          <TableCell className="text-xs">{feed.category || "-"}</TableCell>
                           <TableCell className="text-xs">{feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString("bn-BD") : "কখনো না"}</TableCell>
                           <TableCell>
                             <Button size="icon" variant="ghost" onClick={() => deleteFeed(feed.id)} className="text-destructive">
@@ -456,15 +548,57 @@ const Admin = () => {
             <Card>
               <CardHeader><CardTitle>ক্যাটাগরি ম্যানেজমেন্ট</CardTitle></CardHeader>
               <CardContent>
-                <form onSubmit={handleAddCategory} className="flex gap-3 mb-6">
-                  <Input placeholder="ক্যাটাগরি নাম" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required />
-                  <Input placeholder="স্লাগ (english)" value={newCatSlug} onChange={(e) => setNewCatSlug(e.target.value)} required />
+                <form onSubmit={handleAddCategory} className="flex gap-3 mb-6 flex-wrap">
+                  <Input placeholder="ক্যাটাগরি নাম" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required className="flex-1 min-w-[150px]" />
+                  <Input placeholder="স্লাগ (english)" value={newCatSlug} onChange={(e) => setNewCatSlug(e.target.value)} required className="flex-1 min-w-[150px]" />
+                  <select className="border rounded-md p-2 bg-background min-w-[150px]" value={newCatParent} onChange={(e) => setNewCatParent(e.target.value)}>
+                    <option value="">প্যারেন্ট (ঐচ্ছিক)</option>
+                    {categories.filter((c) => !c.parent_id).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                   <Button type="submit"><Plus className="w-4 h-4" /></Button>
                 </form>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {categories.map((cat) => (
                     <div key={cat.id} className={`p-2 rounded border text-sm ${cat.parent_id ? "ml-4 bg-muted/50" : "font-medium"}`}>
-                      {cat.name}
+                      {cat.name} <span className="text-xs text-muted-foreground">({cat.slug})</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* PhotoCard Tab */}
+          <TabsContent value="photocard">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>📸 ফটোকার্ড জেনারেটর</CardTitle>
+                  <Button onClick={() => navigate("/photo-card")} variant="outline">
+                    <Camera className="w-4 h-4 mr-2" />ফুল পেজে যান
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground text-sm mb-4">
+                  ফটোকার্ড জেনারেটরে ৫টি প্রিসেট টেমপ্লেট (নিউজ, কোটেশন, ইভেন্ট, মিনিমাল, ব্রেকিং), কাস্টম ফ্রেম/লোগো আপলোড এবং QR কোড যুক্ত করার অপশন রয়েছে।
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { icon: "📰", label: "নিউজ কার্ড", desc: "সংবাদ কার্ড তৈরি" },
+                    { icon: "❝", label: "কোটেশন কার্ড", desc: "উদ্ধৃতি কার্ড" },
+                    { icon: "📅", label: "ইভেন্ট কার্ড", desc: "ইভেন্ট পোস্টার" },
+                    { icon: "✨", label: "মিনিমাল", desc: "সিম্পল ডিজাইন" },
+                    { icon: "🔴", label: "ব্রেকিং নিউজ", desc: "জরুরি সংবাদ" },
+                    { icon: "🖼️", label: "কাস্টম ফ্রেম", desc: "নিজস্ব ফ্রেম" },
+                  ].map((item) => (
+                    <div key={item.label} onClick={() => navigate("/photo-card")}
+                      className="p-4 rounded-lg border bg-card hover:bg-muted cursor-pointer text-center transition-colors">
+                      <div className="text-2xl mb-1">{item.icon}</div>
+                      <div className="text-sm font-medium">{item.label}</div>
+                      <div className="text-xs text-muted-foreground">{item.desc}</div>
                     </div>
                   ))}
                 </div>
