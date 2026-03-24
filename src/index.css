@@ -77,12 +77,12 @@
 
 @layer components {
   .news-section-title {
-    @apply text-sm font-bold px-3 py-1.5 inline-block;
+    @apply text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 sm:py-1.5 inline-block;
     background-color: hsl(var(--section-title-bg));
     color: hsl(var(--section-title-foreground));
   }
   .news-category-badge {
-    @apply text-xs font-medium px-2 py-0.5 rounded-sm;
+    @apply text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded-sm;
     background-color: hsl(var(--category-badge));
     color: hsl(var(--category-badge-foreground));
   }
@@ -90,17 +90,17 @@
     @apply bg-card border border-border rounded-sm overflow-hidden transition-shadow hover:shadow-md;
   }
   .news-card-title {
-    @apply text-base font-bold leading-snug text-foreground hover:text-accent transition-colors cursor-pointer line-clamp-2;
+    @apply text-sm sm:text-base font-bold leading-snug text-foreground hover:text-accent transition-colors cursor-pointer line-clamp-2;
   }
   .news-card-meta {
-    @apply text-xs text-muted-foreground;
+    @apply text-[10px] sm:text-xs text-muted-foreground;
   }
   .ticker-bar {
     background-color: hsl(var(--ticker-bg));
     color: hsl(var(--ticker-foreground));
   }
   .column-left, .column-right {
-    @apply space-y-4;
+    @apply space-y-3 sm:space-y-4;
   }
 }
 
