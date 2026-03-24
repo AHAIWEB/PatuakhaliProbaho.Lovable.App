@@ -68,6 +68,7 @@ const Admin = () => {
   // Post search/filter
   const [postSearch, setPostSearch] = useState("");
   const [postPage, setPostPage] = useState(0);
+  const [postDateFilter, setPostDateFilter] = useState("");
   const postsPerPage = 50;
 
   // RSS fetch progress
@@ -286,10 +287,12 @@ const Admin = () => {
     fetchData();
   };
 
-  const filteredPosts = posts.filter((p) =>
-    !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
-    (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase())
-  );
+  const filteredPosts = posts.filter((p) => {
+    const matchSearch = !postSearch || p.title.toLowerCase().includes(postSearch.toLowerCase()) ||
+      (p.source_name || "").toLowerCase().includes(postSearch.toLowerCase());
+    const matchDate = !postDateFilter || (p.published_at && p.published_at.startsWith(postDateFilter));
+    return matchSearch && matchDate;
+  });
   const pagedPosts = filteredPosts.slice(postPage * postsPerPage, (postPage + 1) * postsPerPage);
 
   // District/Upazila data for RSS form
