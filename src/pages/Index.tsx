@@ -47,7 +47,7 @@ const Index = () => {
   const { data: nationalPosts } = useNationalPosts(8);
   const { data: barisalPosts } = usePostsByDivision("barisal", 6);
   const { data: dhakaPosts } = useDivisionPosts("dhaka", 5);
-  const { data: chittagongPosts } = useDivisionPosts("chittagong", 5);
+  const { data: chittagongPosts } = useDivisionPosts("chattogram", 5);
   const { data: sylhetPosts } = useDivisionPosts("sylhet", 5);
   const { data: rajshahiPosts } = useDivisionPosts("rajshahi", 5);
   const { data: khulnaPosts } = useDivisionPosts("khulna", 5);
@@ -63,7 +63,7 @@ const Index = () => {
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
-    { title: "চট্টগ্রাম বিভাগ", posts: chittagongPosts, slug: "chittagong" },
+    { title: "চট্টগ্রাম বিভাগ", posts: chittagongPosts, slug: "chattogram" },
     { title: "সিলেট বিভাগ", posts: sylhetPosts, slug: "sylhet" },
     { title: "রাজশাহী বিভাগ", posts: rajshahiPosts, slug: "rajshahi" },
     { title: "খুলনা বিভাগ", posts: khulnaPosts, slug: "khulna" },
