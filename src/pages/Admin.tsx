@@ -51,6 +51,10 @@ const Admin = () => {
   const [scrapeUpazila, setScrapeUpazila] = useState("");
   const [scrapeCategory, setScrapeCategory] = useState("general");
   const [scrapeInterval, setScrapeInterval] = useState("30");
+  const [scrapeArticleSelector, setScrapeArticleSelector] = useState("");
+  const [scrapeTitleSelector, setScrapeTitleSelector] = useState("");
+  const [scrapeImageSelector, setScrapeImageSelector] = useState("");
+  const [scrapeLinkSelector, setScrapeLinkSelector] = useState("");
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
   const [newCatParent, setNewCatParent] = useState("");
@@ -207,12 +211,19 @@ const Admin = () => {
       url: scrapeUrl, name: scrapeName, division: scrapeDivision || null,
       district: scrapeDistrict || null, upazila: scrapeUpazila || null,
       category: scrapeCategory, scrape_interval_minutes: parseInt(scrapeInterval) || 30,
+      selector_config: (scrapeArticleSelector || scrapeTitleSelector || scrapeImageSelector || scrapeLinkSelector) ? {
+        article: scrapeArticleSelector || null,
+        title: scrapeTitleSelector || null,
+        image: scrapeImageSelector || null,
+        link: scrapeLinkSelector || null,
+      } : {},
     } as any);
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "স্ক্র্যাপ সোর্স যুক্ত হয়েছে" });
       setScrapeUrl(""); setScrapeName(""); setScrapeDivision(""); setScrapeDistrict(""); setScrapeUpazila("");
+      setScrapeArticleSelector(""); setScrapeTitleSelector(""); setScrapeImageSelector(""); setScrapeLinkSelector("");
       fetchData();
     }
   };
@@ -653,6 +664,17 @@ const Admin = () => {
                     <option value="60">প্রতি ১ ঘণ্টা</option>
                     <option value="360">প্রতি ৬ ঘণ্টা</option>
                   </select>
+
+                  {/* CSS Selector Config */}
+                  <div className="md:col-span-2 border rounded-md p-3 bg-muted/30 space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">🎯 CSS সিলেক্টর কনফিগারেশন (ঐচ্ছিক)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input placeholder="আর্টিকেল সিলেক্টর (যেমন: article, .post-item)" value={scrapeArticleSelector} onChange={(e) => setScrapeArticleSelector(e.target.value)} />
+                      <Input placeholder="টাইটেল সিলেক্টর (যেমন: h2 a, .title)" value={scrapeTitleSelector} onChange={(e) => setScrapeTitleSelector(e.target.value)} />
+                      <Input placeholder="ইমেজ সিলেক্টর (যেমন: img.featured, .thumb img)" value={scrapeImageSelector} onChange={(e) => setScrapeImageSelector(e.target.value)} />
+                      <Input placeholder="লিংক সিলেক্টর (যেমন: a.read-more, h2 a)" value={scrapeLinkSelector} onChange={(e) => setScrapeLinkSelector(e.target.value)} />
+                    </div>
+                  </div>
 
                   <Button type="submit" className="md:col-span-2"><Plus className="w-4 h-4 mr-2" />সোর্স যুক্ত করুন</Button>
                 </form>
