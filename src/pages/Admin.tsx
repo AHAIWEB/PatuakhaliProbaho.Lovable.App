@@ -201,6 +201,39 @@ const Admin = () => {
     fetchData();
   };
 
+  const handleAddScrapeSource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from("scrape_sources").insert({
+      url: scrapeUrl, name: scrapeName, division: scrapeDivision || null,
+      district: scrapeDistrict || null, upazila: scrapeUpazila || null,
+      category: scrapeCategory, scrape_interval_minutes: parseInt(scrapeInterval) || 30,
+    } as any);
+    if (error) {
+      toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "সফল", description: "স্ক্র্যাপ সোর্স যুক্ত হয়েছে" });
+      setScrapeUrl(""); setScrapeName(""); setScrapeDivision(""); setScrapeDistrict(""); setScrapeUpazila("");
+      fetchData();
+    }
+  };
+
+  const deleteScrapeSource = async (id: string) => {
+    await supabase.from("scrape_sources").delete().eq("id", id);
+    fetchData();
+  };
+
+  const handleManualScrape = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("auto-scrape");
+    if (error) {
+      toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "সফল", description: `${data?.scraped || 0}টি নিউজ স্ক্র্যাপ হয়েছে` });
+      fetchData();
+    }
+    setLoading(false);
+  };
+
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from("categories").insert({
