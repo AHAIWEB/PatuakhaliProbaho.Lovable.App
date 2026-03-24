@@ -23,6 +23,7 @@ const Admin = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [feeds, setFeeds] = useState<RSSFeed[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [scrapeSources, setScrapeSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Quick post form
