@@ -199,10 +199,46 @@ Deno.serve(async (req) => {
           const { error: insertError, data: inserted } = await supabase
             .from("posts")
             .insert(rows)
-            .select("id");
+            .select("id, title, content");
 
           if (!insertError && inserted) {
             totalInserted += inserted.length;
+
+            // AI post-processing: categorize & extract quotes for each new post
+            const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+            if (LOVABLE_API_KEY) {
+              for (const post of inserted) {
+                try {
+                  // AI categorization
+                  const catRes = await fetch(`${supabaseUrl}/functions/v1/ai-process`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({ action: "categorize", text: post.title + " " + (post.content || "").substring(0, 500) }),
+                  });
+                  if (catRes.ok) {
+                    const catData = await catRes.json();
+                    const updateFields: Record<string, unknown> = {};
+                    if (catData.summary) updateFields.excerpt = catData.summary;
+                    if (catData.tags && Array.isArray(catData.tags)) updateFields.tags = catData.tags;
+                    if (catData.category) updateFields.source_category = catData.category;
+                    // Map AI category to DB category
+                    if (catData.category && categoryMap.has(catData.category)) {
+                      updateFields.category_id = categoryMap.get(catData.category);
+                    }
+                    if (Object.keys(updateFields).length > 0) {
+                      await supabase.from("posts").update(updateFields).eq("id", post.id);
+                    }
+                  } else {
+                    await catRes.text(); // consume body
+                  }
+                } catch {
+                  // AI processing is best-effort, don't fail the feed
+                }
+              }
+            }
           } else if (insertError) {
             errors.push(`${feed.name}: Insert error - ${insertError.message}`);
           }
