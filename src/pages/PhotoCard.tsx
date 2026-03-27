@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe } from "lucide-react";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe, Layers, ArrowUp, ArrowDown } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +35,6 @@ const cardSizes: { id: CardSize; name: string; w: number; h: number }[] = [
   { id: "poster", name: "3:4", w: 1080, h: 1440 },
 ];
 
-// Built-in frame presets (drawn via canvas)
 const builtInFrames = [
   { id: "none", name: "কোনো ফ্রেম নেই" },
   { id: "classic", name: "ক্লাসিক বর্ডার" },
@@ -58,6 +57,8 @@ const PhotoCard = () => {
   const [quoteDesignation, setQuoteDesignation] = useState("");
   const [bgColor, setBgColor] = useState("#1a1a2e");
   const [textColor, setTextColor] = useState("#e74c3c");
+  const [titleColor, setTitleColor] = useState("#ffffff");
+  const [quoteColor, setQuoteColor] = useState("#dddddd");
   const [fetchUrl, setFetchUrl] = useState("");
   const [urlFetching, setUrlFetching] = useState(false);
   const [fetchedImage, setFetchedImage] = useState("");
@@ -70,6 +71,8 @@ const PhotoCard = () => {
   const [titleFontSize, setTitleFontSize] = useState(52);
   const [quoteFontSize, setQuoteFontSize] = useState(36);
   const [activeFrame, setActiveFrame] = useState("none");
+  const [frameColor1, setFrameColor1] = useState("#e74c3c");
+  const [frameColor2, setFrameColor2] = useState("#f39c12");
 
   // Upload states
   const [uploadedBgImage, setUploadedBgImage] = useState<string | null>(null);
@@ -80,6 +83,15 @@ const PhotoCard = () => {
   const [personOffsetY, setPersonOffsetY] = useState(50);
   const [personSize, setPersonSize] = useState(50);
   const [removingBg, setRemovingBg] = useState(false);
+  // Image layer: true = image in front of frame, false = behind
+  const [imageInFront, setImageInFront] = useState(false);
+
+  // Text position states (draggable)
+  const [titleOffsetX, setTitleOffsetX] = useState(50);
+  const [titleOffsetY, setTitleOffsetY] = useState(35);
+  const [quoteOffsetX, setQuoteOffsetX] = useState(50);
+  const [quoteOffsetY, setQuoteOffsetY] = useState(55);
+  const [dragTarget, setDragTarget] = useState<"person" | "title" | "quote" | null>(null);
 
   const bgInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
@@ -87,9 +99,8 @@ const PhotoCard = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Pointer-based drag state (works on both touch and mouse)
-  const dragRef = useRef<{ startX: number; startY: number; startOx: number; startOy: number; active: boolean }>({
-    startX: 0, startY: 0, startOx: 0, startOy: 0, active: false,
+  const dragRef = useRef<{ startX: number; startY: number; startOx: number; startOy: number; active: boolean; target: string }>({
+    startX: 0, startY: 0, startOx: 0, startOy: 0, active: false, target: "",
   });
 
   const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
@@ -97,38 +108,23 @@ const PhotoCard = () => {
   const [postingToSite, setPostingToSite] = useState(false);
 
   const extractQuotesLocally = useCallback((text: string) => {
-    const cleaned = text
-      .replace(/^শিরোনাম\s*:\s*/i, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
+    const cleaned = text.replace(/^শিরোনাম\s*:\s*/i, "").replace(/\s+/g, " ").trim();
     if (!cleaned) return [];
-
-    const directQuotes = Array.from(cleaned.matchAll(/["“”'‘’❝❞]([^"“”'‘’❝❞]{6,180})["“”'‘’❝❞]/g))
+    const directQuotes = Array.from(cleaned.matchAll(/["""'''❝❞]([^"""'''❝❞]{6,180})["""'''❝❞]/g))
       .map((match) => `"${match[1].trim()}"`);
-
     if (directQuotes.length) return directQuotes.slice(0, 3);
-
-    const parts = cleaned
-      .split(/[।!?]| - | — |:|;/)
-      .map((part) => part.trim())
-      .filter((part) => part.length > 8);
-
+    const parts = cleaned.split(/[।!?]| - | — |:|;/).map((p) => p.trim()).filter((p) => p.length > 8);
     if (parts.length === 0) return [`"${cleaned.slice(0, 140)}"`];
-
-    return parts.slice(0, 3).map((part) => `"${part}"`);
+    return parts.slice(0, 3).map((p) => `"${p}"`);
   }, []);
 
   const getImageProxyUrl = useCallback((src: string) => {
     if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
-
     try {
       const parsed = new URL(src, window.location.origin);
       if (parsed.origin === window.location.origin) return parsed.toString();
       return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(parsed.toString())}`;
-    } catch {
-      return src;
-    }
+    } catch { return src; }
   }, []);
 
   useEffect(() => {
@@ -154,10 +150,7 @@ const PhotoCard = () => {
     setFetchedImage(post.image_url || "");
     setCustomQuote("");
     setQrUrl(post.source_url || "");
-    // Auto extract AI quotes from title
-    if (post.title) {
-      handleAiQuotes(post.title);
-    }
+    if (post.title) handleAiQuotes(post.title);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -176,7 +169,6 @@ const PhotoCard = () => {
     reader.readAsDataURL(file);
   };
 
-  // Improved background removal using color distance + edge detection
   const removeBackground = useCallback(async () => {
     if (!uploadedPersonImage) return;
     setRemovingBg(true);
@@ -184,58 +176,32 @@ const PhotoCard = () => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
-        const w = canvas.width;
-        const h = canvas.height;
-
-        // Sample corners to detect background color
+        const w = canvas.width, h = canvas.height;
         const samples: number[][] = [];
         const sampleSize = Math.min(20, Math.floor(w / 10));
         for (let y = 0; y < sampleSize; y++) {
-          for (let x = 0; x < sampleSize; x++) {
-            const i = (y * w + x) * 4;
-            samples.push([data[i], data[i + 1], data[i + 2]]);
-          }
-          for (let x = w - sampleSize; x < w; x++) {
-            const i = (y * w + x) * 4;
-            samples.push([data[i], data[i + 1], data[i + 2]]);
-          }
+          for (let x = 0; x < sampleSize; x++) { const i = (y * w + x) * 4; samples.push([data[i], data[i+1], data[i+2]]); }
+          for (let x = w - sampleSize; x < w; x++) { const i = (y * w + x) * 4; samples.push([data[i], data[i+1], data[i+2]]); }
         }
         for (let y = h - sampleSize; y < h; y++) {
-          for (let x = 0; x < sampleSize; x++) {
-            const i = (y * w + x) * 4;
-            samples.push([data[i], data[i + 1], data[i + 2]]);
-          }
-          for (let x = w - sampleSize; x < w; x++) {
-            const i = (y * w + x) * 4;
-            samples.push([data[i], data[i + 1], data[i + 2]]);
-          }
+          for (let x = 0; x < sampleSize; x++) { const i = (y * w + x) * 4; samples.push([data[i], data[i+1], data[i+2]]); }
+          for (let x = w - sampleSize; x < w; x++) { const i = (y * w + x) * 4; samples.push([data[i], data[i+1], data[i+2]]); }
         }
-
-        // Average background color
         const avgR = samples.reduce((s, c) => s + c[0], 0) / samples.length;
         const avgG = samples.reduce((s, c) => s + c[1], 0) / samples.length;
         const avgB = samples.reduce((s, c) => s + c[2], 0) / samples.length;
-
-        const threshold = 60; // Color distance threshold
+        const threshold = 60;
         for (let i = 0; i < data.length; i += 4) {
-          const dr = data[i] - avgR;
-          const dg = data[i + 1] - avgG;
-          const db = data[i + 2] - avgB;
-          const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-          if (dist < threshold) {
-            data[i + 3] = 0;
-          } else if (dist < threshold + 20) {
-            // Soft edge
-            data[i + 3] = Math.round(255 * ((dist - threshold) / 20));
-          }
+          const dr = data[i] - avgR, dg = data[i+1] - avgG, db = data[i+2] - avgB;
+          const dist = Math.sqrt(dr*dr + dg*dg + db*db);
+          if (dist < threshold) data[i+3] = 0;
+          else if (dist < threshold + 20) data[i+3] = Math.round(255 * ((dist - threshold) / 20));
         }
-
         ctx.putImageData(imageData, 0, 0);
         setUploadedPersonImage(canvas.toDataURL("image/png"));
         toast({ title: "✅ ব্যাকগ্রাউন্ড রিমুভ হয়েছে" });
@@ -248,30 +214,23 @@ const PhotoCard = () => {
     }
   }, [uploadedPersonImage, toast]);
 
-  // AI quote extraction - now from title/headline
   const handleAiQuotes = async (text: string) => {
     setAiLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-process", {
-        body: { action: "extract_quotes", text },
-      });
+      const { data, error } = await supabase.functions.invoke("ai-process", { body: { action: "extract_quotes", text } });
       if (error) throw error;
       if (data?.quotes?.length) {
         setExtractedQuotes(data.quotes);
         toast({ title: "✅ AI কোটেশন", description: `${data.quotes.length}টি কোটেশন পাওয়া গেছে` });
       } else {
-        const fallbackQuotes = extractQuotesLocally(text);
-        setExtractedQuotes(fallbackQuotes);
-        toast({ title: "✅ কোটেশন তৈরি হয়েছে", description: `${fallbackQuotes.length}টি কোটেশন পাওয়া গেছে` });
+        const fb = extractQuotesLocally(text);
+        setExtractedQuotes(fb);
+        toast({ title: "✅ কোটেশন তৈরি হয়েছে", description: `${fb.length}টি কোটেশন পাওয়া গেছে` });
       }
-    } catch (e: any) {
-      const fallbackQuotes = extractQuotesLocally(text);
-      setExtractedQuotes(fallbackQuotes);
-      toast({
-        title: "✅ কোটেশন তৈরি হয়েছে",
-        description: fallbackQuotes.length ? "Fallback extraction ব্যবহার করা হয়েছে" : (e?.message || "কোটেশন তৈরি করা যায়নি"),
-        variant: fallbackQuotes.length ? "default" : "destructive",
-      });
+    } catch {
+      const fb = extractQuotesLocally(text);
+      setExtractedQuotes(fb);
+      toast({ title: "✅ কোটেশন তৈরি হয়েছে", description: fb.length ? "Fallback extraction ব্যবহার করা হয়েছে" : "কোটেশন তৈরি করা যায়নি" });
     }
     setAiLoading(false);
   };
@@ -285,7 +244,6 @@ const PhotoCard = () => {
       if (data?.title) setCustomTitle(data.title);
       if (data?.image) setFetchedImage(data.image);
       setQrUrl(fetchUrl);
-      // Use AI for better quote extraction
       if (data?.content || data?.description) {
         await handleAiQuotes(`${data.title}\n\n${data.content || data.description}`);
       } else if (data?.quotes?.length) {
@@ -305,10 +263,9 @@ const PhotoCard = () => {
         img.crossOrigin = "anonymous";
         img.referrerPolicy = "no-referrer";
         img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Failed to load image: ${imageSrc}`));
+        img.onerror = () => reject(new Error(`Failed to load image`));
         img.src = imageSrc;
       });
-
     const proxiedSrc = getImageProxyUrl(src);
     return tryLoad(src).catch(() => proxiedSrc !== src ? tryLoad(proxiedSrc) : Promise.reject(new Error("Image load failed")));
   }, [getImageProxyUrl]);
@@ -336,17 +293,20 @@ const PhotoCard = () => {
     return { W: size.w, H: size.h };
   };
 
-  // Draw built-in frame
+  // Draw built-in frame with gradient colors
   const drawBuiltInFrame = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    const fc = textColor;
     ctx.save();
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, frameColor1);
+    grad.addColorStop(1, frameColor2);
+
     switch (activeFrame) {
       case "classic":
-        ctx.strokeStyle = fc; ctx.lineWidth = 12;
+        ctx.strokeStyle = grad; ctx.lineWidth = 12;
         ctx.strokeRect(20, 20, W - 40, H - 40);
         break;
-      case "rounded":
-        ctx.strokeStyle = fc; ctx.lineWidth = 8;
+      case "rounded": {
+        ctx.strokeStyle = grad; ctx.lineWidth = 8;
         const r = 40;
         ctx.beginPath();
         ctx.moveTo(20 + r, 20); ctx.lineTo(W - 20 - r, 20);
@@ -359,48 +319,45 @@ const PhotoCard = () => {
         ctx.quadraticCurveTo(20, 20, 20 + r, 20);
         ctx.stroke();
         break;
+      }
       case "double":
-        ctx.strokeStyle = fc; ctx.lineWidth = 4;
+        ctx.strokeStyle = grad; ctx.lineWidth = 4;
         ctx.strokeRect(12, 12, W - 24, H - 24);
         ctx.strokeRect(24, 24, W - 48, H - 48);
         break;
-      case "corner-accent":
-        ctx.strokeStyle = fc; ctx.lineWidth = 6;
+      case "corner-accent": {
+        ctx.strokeStyle = grad; ctx.lineWidth = 6;
         const cs = 80;
-        // Top-left
         ctx.beginPath(); ctx.moveTo(10, cs); ctx.lineTo(10, 10); ctx.lineTo(cs, 10); ctx.stroke();
-        // Top-right
         ctx.beginPath(); ctx.moveTo(W - cs, 10); ctx.lineTo(W - 10, 10); ctx.lineTo(W - 10, cs); ctx.stroke();
-        // Bottom-left
         ctx.beginPath(); ctx.moveTo(10, H - cs); ctx.lineTo(10, H - 10); ctx.lineTo(cs, H - 10); ctx.stroke();
-        // Bottom-right
         ctx.beginPath(); ctx.moveTo(W - cs, H - 10); ctx.lineTo(W - 10, H - 10); ctx.lineTo(W - 10, H - cs); ctx.stroke();
         break;
+      }
       case "film-strip":
         ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 50, H); ctx.fillRect(W - 50, 0, 50, H);
         ctx.fillStyle = "#fff";
-        for (let y = 15; y < H; y += 50) {
-          ctx.fillRect(10, y, 30, 30); ctx.fillRect(W - 40, y, 30, 30);
-        }
+        for (let y = 15; y < H; y += 50) { ctx.fillRect(10, y, 30, 30); ctx.fillRect(W - 40, y, 30, 30); }
         break;
       case "ornate":
-        ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 3;
+        ctx.strokeStyle = grad; ctx.lineWidth = 3;
         ctx.strokeRect(15, 15, W - 30, H - 30);
-        ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 1;
+        ctx.lineWidth = 1;
         ctx.strokeRect(22, 22, W - 44, H - 44);
-        // Corner ornaments
         const ocs = 60;
         ctx.lineWidth = 2;
-        [
-          [15, 15], [W - 15 - ocs, 15], [15, H - 15 - ocs], [W - 15 - ocs, H - 15 - ocs]
-        ].forEach(([x, y]) => {
-          ctx.beginPath();
-          ctx.arc(x + ocs / 2, y + ocs / 2, ocs / 3, 0, Math.PI * 2);
-          ctx.stroke();
+        [[15, 15], [W - 15 - ocs, 15], [15, H - 15 - ocs], [W - 15 - ocs, H - 15 - ocs]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.arc(x + ocs / 2, y + ocs / 2, ocs / 3, 0, Math.PI * 2); ctx.stroke();
         });
         break;
     }
     ctx.restore();
+  };
+
+  // Capitalize first letter helper
+  const capitalizeFirst = (text: string) => {
+    if (!text) return text;
+    return text.charAt(0).toUpperCase() + text.slice(1);
   };
 
   const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
@@ -411,7 +368,6 @@ const PhotoCard = () => {
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
-        // Cover-fit
         const scale = Math.max(W / bgImg.width, H / bgImg.height);
         const sw = bgImg.width * scale, sh = bgImg.height * scale;
         ctx.drawImage(bgImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
@@ -426,17 +382,51 @@ const PhotoCard = () => {
       ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
     }
 
-    // Custom frame image overlay
-    if (uploadedFrameImage) {
-      try {
-        const frameImg = await loadImage(uploadedFrameImage);
-        ctx.drawImage(frameImg, 0, 0, W, H);
-      } catch { /* continue */ }
-    }
+    // Layer order: if imageInFront=false, draw person first, then frame. Otherwise frame first, then person.
+    const drawPersonLayer = async () => {
+      if (uploadedPersonImage) {
+        try {
+          const personImg = await loadImage(uploadedPersonImage);
+          const size = Math.round(W * (personSize / 100));
+          const px = Math.round((W - size) * (personOffsetX / 100));
+          const py = Math.round((H - size) * (personOffsetY / 100));
+          ctx.drawImage(personImg, px, py, size, size);
+        } catch { /* failed */ }
+      }
+    };
 
-    // Built-in frame
-    if (activeFrame !== "none" && !uploadedFrameImage) {
-      drawBuiltInFrame(ctx, W, H);
+    const drawFrameLayer = () => {
+      if (uploadedFrameImage) {
+        // Draw custom frame overlay - DON'T clear bg image
+        try {
+          const frameCanvas = document.createElement("canvas");
+          frameCanvas.width = W; frameCanvas.height = H;
+          const fctx = frameCanvas.getContext("2d")!;
+          const frameImg = new Image();
+          frameImg.src = uploadedFrameImage;
+          return new Promise<void>((resolve) => {
+            frameImg.onload = () => {
+              fctx.drawImage(frameImg, 0, 0, W, H);
+              ctx.drawImage(frameCanvas, 0, 0);
+              resolve();
+            };
+            frameImg.onerror = () => resolve();
+          });
+        } catch { /* continue */ }
+      } else if (activeFrame !== "none") {
+        drawBuiltInFrame(ctx, W, H);
+      }
+      return Promise.resolve();
+    };
+
+    if (imageInFront) {
+      // Frame first, then person image on top
+      await drawFrameLayer();
+      await drawPersonLayer();
+    } else {
+      // Person behind frame
+      await drawPersonLayer();
+      await drawFrameLayer();
     }
 
     // Template-specific drawing
@@ -449,17 +439,6 @@ const PhotoCard = () => {
       case "elegant": drawElegantTemplate(ctx, W, H); break;
       case "gradient": drawGradientTemplate(ctx, W, H); break;
       case "bold": drawBoldTemplate(ctx, W, H); break;
-    }
-
-    // Person image
-    if (uploadedPersonImage) {
-      try {
-        const personImg = await loadImage(uploadedPersonImage);
-        const size = Math.round(W * (personSize / 100));
-        const px = Math.round((W - size) * (personOffsetX / 100));
-        const py = Math.round((H - size) * (personOffsetY / 100));
-        ctx.drawImage(personImg, px, py, size, size);
-      } catch { /* failed */ }
     }
 
     // Logo
@@ -499,9 +478,8 @@ const PhotoCard = () => {
   };
 
   const hasBgImg = () => !!(uploadedBgImage || fetchedImage);
-  const txtColor = (fallback: string) => hasBgImg() ? "#ffffff" : fallback;
 
-  const drawSiteBranding = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+  const drawSiteBranding = (ctx: CanvasRenderingContext2D, W: number, _H: number) => {
     if (!uploadedLogo) {
       ctx.fillStyle = "#fff";
       ctx.font = "bold 26px 'Hind Siliguri', sans-serif";
@@ -510,27 +488,77 @@ const PhotoCard = () => {
     }
   };
 
-  const drawTitleAndQuote = (ctx: CanvasRenderingContext2D, W: number, H: number, startY: number, maxW: number) => {
-    const titleSize = titleFontSize;
-    const quoteSize = quoteFontSize;
-    let y = startY;
+  // Draw title and quote at dynamic positions with drop cap
+  const drawTitleAndQuote = (ctx: CanvasRenderingContext2D, W: number, H: number, _startY: number, maxW: number) => {
+    const tSize = titleFontSize;
+    const qSize = quoteFontSize;
+
+    // Calculate position from percentage
+    const titleX = Math.round(W * (titleOffsetX / 100));
+    const titleY = Math.round(H * (titleOffsetY / 100));
+    const quoteX = Math.round(W * (quoteOffsetX / 100));
+    const quoteY = Math.round(H * (quoteOffsetY / 100));
 
     if (customTitle) {
-      ctx.fillStyle = txtColor(textColor);
-      ctx.font = `bold ${titleSize}px 'Hind Siliguri', sans-serif`;
+      const title = capitalizeFirst(customTitle);
+      ctx.fillStyle = titleColor;
       ctx.textAlign = "left";
-      const lines = wrapText(ctx, customTitle, maxW);
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += titleSize + 16; });
+
+      // Drop cap: first character larger
+      const firstChar = title.charAt(0);
+      const restText = title.slice(1);
+      const dropCapSize = Math.round(tSize * 1.6);
+
+      ctx.font = `bold ${dropCapSize}px 'Hind Siliguri', sans-serif`;
+      const dcWidth = ctx.measureText(firstChar).width;
+      const startX = Math.max(40, titleX - maxW / 2);
+      let y = titleY;
+
+      ctx.fillText(firstChar, startX, y);
+
+      // Rest of the first word on same line
+      ctx.font = `bold ${tSize}px 'Hind Siliguri', sans-serif`;
+      const firstSpaceIdx = restText.indexOf(" ");
+      const firstWordRest = firstSpaceIdx >= 0 ? restText.slice(0, firstSpaceIdx) : restText;
+      const remainingText = firstSpaceIdx >= 0 ? restText.slice(firstSpaceIdx + 1) : "";
+
+      ctx.fillText(firstWordRest, startX + dcWidth + 2, y);
+
+      if (remainingText) {
+        y += tSize + 16;
+        const lines = wrapText(ctx, remainingText, maxW);
+        lines.forEach((line) => { ctx.fillText(line, startX, y); y += tSize + 16; });
+      }
     }
+
     if (customQuote) {
-      y += 10;
-      ctx.fillStyle = hasBgImg() ? "rgba(255,255,255,0.85)" : "#444";
-      ctx.font = `${quoteSize}px 'Hind Siliguri', sans-serif`;
+      const quote = capitalizeFirst(customQuote);
+      ctx.fillStyle = quoteColor;
       ctx.textAlign = "left";
-      const lines = wrapText(ctx, customQuote, maxW);
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteSize + 14; });
+
+      const firstChar = quote.charAt(0);
+      const restText = quote.slice(1);
+      const dropCapSize = Math.round(qSize * 1.5);
+      const startX = Math.max(40, quoteX - maxW / 2);
+      let y = quoteY;
+
+      ctx.font = `bold ${dropCapSize}px 'Hind Siliguri', sans-serif`;
+      const dcWidth = ctx.measureText(firstChar).width;
+      ctx.fillText(firstChar, startX, y);
+
+      ctx.font = `${qSize}px 'Hind Siliguri', sans-serif`;
+      const firstSpaceIdx = restText.indexOf(" ");
+      const firstWordRest = firstSpaceIdx >= 0 ? restText.slice(0, firstSpaceIdx) : restText;
+      const remainingText = firstSpaceIdx >= 0 ? restText.slice(firstSpaceIdx + 1) : "";
+
+      ctx.fillText(firstWordRest, startX + dcWidth + 2, y);
+
+      if (remainingText) {
+        y += qSize + 14;
+        const lines = wrapText(ctx, remainingText, maxW);
+        lines.forEach((line) => { ctx.fillText(line, startX, y); y += qSize + 14; });
+      }
     }
-    return y;
   };
 
   const drawPersonInfo = (ctx: CanvasRenderingContext2D, W: number, H: number, color: string) => {
@@ -583,7 +611,7 @@ const PhotoCard = () => {
     drawTitleAndQuote(ctx, W, H, 340, maxW());
     ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
     ctx.textAlign = "right"; ctx.fillText("❞", W - 40, H - 120);
-    drawPersonInfo(ctx, W, H, txtColor(textColor));
+    drawPersonInfo(ctx, W, H, titleColor);
     drawFooter(ctx, W, H);
   };
 
@@ -594,7 +622,7 @@ const PhotoCard = () => {
     ctx.textAlign = "center"; ctx.fillText("📅 ইভেন্ট", 150, 96);
     drawSiteBranding(ctx, W, H);
     drawTitleAndQuote(ctx, W, H, 220, maxW());
-    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    drawPersonInfo(ctx, W, H, titleColor);
     drawFooter(ctx, W, H);
   };
 
@@ -606,9 +634,9 @@ const PhotoCard = () => {
     }
     ctx.fillStyle = textColor; ctx.fillRect(80, 200, 120, 4);
     drawTitleAndQuote(ctx, W, H, 280, maxW());
-    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    drawPersonInfo(ctx, W, H, titleColor);
     if (!uploadedLogo) {
-      ctx.fillStyle = txtColor(textColor);
+      ctx.fillStyle = titleColor;
       ctx.font = "24px 'Hind Siliguri', sans-serif";
       ctx.textAlign = "right";
       ctx.fillText("পটুয়াখালী প্রবাহ", W - 60, H - 30);
@@ -621,7 +649,7 @@ const PhotoCard = () => {
     ctx.textAlign = "center"; ctx.fillText("🔴 ব্রেকিং নিউজ 🔴", W / 2, 68);
     drawSiteBranding(ctx, W, H);
     drawTitleAndQuote(ctx, W, H, 230, maxW());
-    drawPersonInfo(ctx, W, H, txtColor("#333"));
+    drawPersonInfo(ctx, W, H, titleColor);
     drawFooter(ctx, W, H, "#e74c3c");
   };
 
@@ -631,25 +659,11 @@ const PhotoCard = () => {
       grad.addColorStop(0, "#0f0c29"); grad.addColorStop(0.5, "#302b63"); grad.addColorStop(1, "#24243e");
       ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
     }
-    // Gold line accents
     ctx.strokeStyle = "#c4953a"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(80, 140); ctx.lineTo(W - 80, 140); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(80, H - 100); ctx.lineTo(W - 80, H - 100); ctx.stroke();
     drawSiteBranding(ctx, W, H);
-    ctx.fillStyle = "#c4953a"; ctx.font = `bold ${titleFontSize}px 'Hind Siliguri', sans-serif`;
-    ctx.textAlign = "left";
-    let y = 220;
-    if (customTitle) {
-      const lines = wrapText(ctx, customTitle, maxW());
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += titleFontSize + 16; });
-    }
-    if (customQuote) {
-      y += 10;
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.font = `italic ${quoteFontSize}px 'Hind Siliguri', sans-serif`;
-      const lines = wrapText(ctx, customQuote, maxW());
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteFontSize + 14; });
-    }
+    drawTitleAndQuote(ctx, W, H, 220, maxW());
     drawPersonInfo(ctx, W, H, "#c4953a");
     drawFooter(ctx, W, H, "#1a1a2e");
   };
@@ -660,7 +674,6 @@ const PhotoCard = () => {
       grad.addColorStop(0, "#667eea"); grad.addColorStop(1, "#764ba2");
       ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
     }
-    // Decorative circles
     ctx.globalAlpha = 0.1;
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.arc(W * 0.8, H * 0.2, 200, 0, Math.PI * 2); ctx.fill();
@@ -673,28 +686,11 @@ const PhotoCard = () => {
   };
 
   const drawBoldTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    if (!hasBgImg()) {
-      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-    }
-    // Diagonal accent
+    if (!hasBgImg()) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
     ctx.fillStyle = textColor;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.4, 0); ctx.lineTo(0, H * 0.4); ctx.closePath(); ctx.fill();
     drawSiteBranding(ctx, W, H);
-    const bigTitleSize = Math.min(titleFontSize + 10, 80);
-    ctx.fillStyle = "#fff"; ctx.font = `bold ${bigTitleSize}px 'Hind Siliguri', sans-serif`;
-    ctx.textAlign = "left";
-    let y = 300;
-    if (customTitle) {
-      const lines = wrapText(ctx, customTitle, maxW());
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += bigTitleSize + 16; });
-    }
-    if (customQuote) {
-      y += 10;
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.font = `${quoteFontSize}px 'Hind Siliguri', sans-serif`;
-      const lines = wrapText(ctx, customQuote, maxW());
-      lines.forEach((line) => { ctx.fillText(line, 80, y); y += quoteFontSize + 14; });
-    }
+    drawTitleAndQuote(ctx, W, H, 300, maxW());
     drawPersonInfo(ctx, W, H, "#fff");
     drawFooter(ctx, W, H, textColor);
   };
@@ -727,7 +723,6 @@ const PhotoCard = () => {
     } catch { downloadCard(); }
   };
 
-  // Post card as a new post to the site
   const postToSite = async () => {
     if (!preview || !customTitle) {
       toast({ title: "শিরোনাম ও প্রিভিউ প্রয়োজন", variant: "destructive" });
@@ -737,8 +732,7 @@ const PhotoCard = () => {
     try {
       const slug = customTitle.replace(/[^\u0980-\u09FFa-zA-Z0-9\s]/g, "").replace(/\s+/g, "-").toLowerCase() + "-" + Date.now();
       const { error } = await supabase.from("posts").insert({
-        title: customTitle,
-        slug,
+        title: customTitle, slug,
         content: customQuote || customTitle,
         excerpt: customQuote || customTitle.substring(0, 200),
         image_url: fetchedImage || preview,
@@ -749,14 +743,13 @@ const PhotoCard = () => {
         tags: ["ফটোকার্ড"],
       });
       if (error) throw error;
-      toast({ title: "✅ সাইটে পোস্ট হয়েছে!", description: "পোস্টটি সফলভাবে প্রকাশিত হয়েছে" });
+      toast({ title: "✅ সাইটে পোস্ট হয়েছে!" });
     } catch (e: any) {
       toast({ title: "পোস্ট ব্যর্থ", description: e.message, variant: "destructive" });
     }
     setPostingToSite(false);
   };
 
-  // Share to Blogger
   const shareToBlogger = () => {
     if (!customTitle) return;
     const bloggerUrl = new URL("https://www.blogger.com/blog-this.g");
@@ -773,13 +766,37 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
     window.open(bloggerUrl.toString(), "_blank", "width=700,height=600");
   };
 
-  // ======= Pointer-based Drag (touch + mouse) =======
+  // ======= Pointer-based Drag (touch + mouse) for person, title, quote =======
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (!uploadedPersonImage) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startOx: personOffsetX, startOy: personOffsetY, active: true };
-  }, [uploadedPersonImage, personOffsetX, personOffsetY]);
+
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // Determine which element is closest to the touch point
+    const titleDist = Math.hypot(xPct - titleOffsetX, yPct - titleOffsetY);
+    const quoteDist = customQuote ? Math.hypot(xPct - quoteOffsetX, yPct - quoteOffsetY) : Infinity;
+    const personDist = uploadedPersonImage ? Math.hypot(xPct - personOffsetX, yPct - personOffsetY) : Infinity;
+
+    let target = "title";
+    let startOx = titleOffsetX, startOy = titleOffsetY;
+    const minDist = Math.min(titleDist, quoteDist, personDist);
+
+    if (minDist === personDist && personDist < 30) {
+      target = "person"; startOx = personOffsetX; startOy = personOffsetY;
+    } else if (minDist === quoteDist && quoteDist < 30) {
+      target = "quote"; startOx = quoteOffsetX; startOy = quoteOffsetY;
+    } else {
+      target = "title"; startOx = titleOffsetX; startOy = titleOffsetY;
+    }
+
+    setDragTarget(target as any);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, startOx, startOy, active: true, target };
+  }, [uploadedPersonImage, personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, customQuote]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current?.active) return;
@@ -789,21 +806,28 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
     const rect = container.getBoundingClientRect();
     const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
     const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    setPersonOffsetX(Math.max(0, Math.min(100, dragRef.current.startOx + dx)));
-    setPersonOffsetY(Math.max(0, Math.min(100, dragRef.current.startOy + dy)));
+    const nx = Math.max(0, Math.min(100, dragRef.current.startOx + dx));
+    const ny = Math.max(0, Math.min(100, dragRef.current.startOy + dy));
+
+    switch (dragRef.current.target) {
+      case "person": setPersonOffsetX(nx); setPersonOffsetY(ny); break;
+      case "title": setTitleOffsetX(nx); setTitleOffsetY(ny); break;
+      case "quote": setQuoteOffsetX(nx); setQuoteOffsetY(ny); break;
+    }
   }, []);
 
   const handlePointerUp = useCallback(() => {
     if (dragRef.current) dragRef.current.active = false;
+    setDragTarget(null);
   }, []);
 
   // Auto-regenerate on drag end
   useEffect(() => {
-    if (!dragRef.current?.active && preview && uploadedPersonImage) {
+    if (!dragRef.current?.active && preview) {
       const timer = setTimeout(generateCard, 300);
       return () => clearTimeout(timer);
     }
-  }, [personOffsetX, personOffsetY]);
+  }, [personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -866,7 +890,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
               </CardContent>
             </Card>
 
-            {/* Image Uploads - Compact */}
+            {/* Image Uploads */}
             <Card>
               <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">📷 ছবি ও ফ্রেম</CardTitle></CardHeader>
               <CardContent className="p-3 pt-1 space-y-2">
@@ -918,6 +942,17 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                   )}
                 </div>
 
+                {/* Image layer toggle */}
+                {(uploadedPersonImage || uploadedFrameImage) && (
+                  <div className="flex items-center gap-2 bg-muted/50 rounded p-2">
+                    <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[11px] font-medium">ছবি লেয়ার:</span>
+                    <Button onClick={() => setImageInFront(!imageInFront)} variant="outline" size="sm" className="h-6 text-[10px] px-2 gap-1">
+                      {imageInFront ? <><ArrowUp className="w-3 h-3" />ফ্রন্টে</> : <><ArrowDown className="w-3 h-3" />ব্যাকে</>}
+                    </Button>
+                  </div>
+                )}
+
                 {/* Person image controls */}
                 {uploadedPersonImage && (
                   <div className="space-y-1.5 bg-muted/50 rounded p-2">
@@ -957,6 +992,19 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       </button>
                     ))}
                   </div>
+                  {/* Frame gradient color pickers */}
+                  {activeFrame !== "none" && !uploadedFrameImage && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-1">
+                        <label className="text-[10px]">ফ্রেম রং ১:</label>
+                        <input type="color" value={frameColor1} onChange={(e) => setFrameColor1(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <label className="text-[10px]">ফ্রেম রং ২:</label>
+                        <input type="color" value={frameColor2} onChange={(e) => setFrameColor2(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -984,15 +1032,23 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                   </div>
                 </div>
 
-                {/* Colors & QR */}
-                <div className="flex items-center gap-3 flex-wrap">
+                {/* Colors */}
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1">
                     <label className="text-[10px]">BG:</label>
                     <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
                   </div>
                   <div className="flex items-center gap-1">
-                    <label className="text-[10px]">টেক্সট:</label>
+                    <label className="text-[10px]">অ্যাক্সেন্ট:</label>
                     <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-[10px]">শিরোনাম:</label>
+                    <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-[10px]">কোটেশন:</label>
+                    <input type="color" value={quoteColor} onChange={(e) => setQuoteColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0" />
                   </div>
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input type="checkbox" checked={showQr} onChange={(e) => setShowQr(e.target.checked)} className="rounded" />
@@ -1000,6 +1056,9 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                   </label>
                 </div>
                 {showQr && <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="h-8 text-xs" />}
+
+                {/* Text position hint */}
+                <p className="text-[10px] text-muted-foreground">👆 প্রিভিউতে টাচ/ড্র্যাগ করে শিরোনাম ও কোটেশন সরান</p>
 
                 <Button onClick={generateCard} className="w-full h-10">
                   <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
@@ -1037,11 +1096,9 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       className="relative touch-none select-none cursor-grab active:cursor-grabbing"
                     >
                       <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
-                      {uploadedPersonImage && (
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
-                          👆 ড্র্যাগ করে ছবি সরান
-                        </div>
-                      )}
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
+                        👆 ড্র্যাগ করে {dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরান
+                      </div>
                     </div>
                     <div className="flex gap-1.5 flex-wrap">
                       <Button onClick={downloadCard} className="flex-1 h-9" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
