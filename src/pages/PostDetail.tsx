@@ -77,20 +77,41 @@ const PostDetail = () => {
     navigate(`/photo-card?${params.toString()}`);
   };
 
+  // Dynamic SEO meta tags
+  const pageTitle = `${cleanText(post.title)} | পটুয়াখালী প্রবাহ`;
+  const pageDesc = cleanText(post.excerpt || displayContent).substring(0, 155);
+  
+  // Update document head for SEO
+  document.title = pageTitle;
+  const updateMeta = (prop: string, content: string) => {
+    let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+    if (!el) { el = document.createElement("meta"); (prop.startsWith("og:") || prop.startsWith("article:")) ? el.setAttribute("property", prop) : el.setAttribute("name", prop); document.head.appendChild(el); }
+    el.setAttribute("content", content);
+  };
+  updateMeta("og:title", pageTitle);
+  updateMeta("og:description", pageDesc);
+  updateMeta("og:type", "article");
+  updateMeta("og:url", postUrl);
+  if (post.image_url) updateMeta("og:image", post.image_url);
+  updateMeta("twitter:title", pageTitle);
+  updateMeta("twitter:description", pageDesc);
+  if (post.image_url) updateMeta("twitter:image", post.image_url);
+  if (post.published_at) updateMeta("article:published_time", post.published_at);
+
   return (
     <div className="min-h-screen bg-background">
       <TopBar />
       <Header />
       <CategoryNav />
 
-      <main className="container mx-auto px-4 mt-6 max-w-4xl">
+      <main className="container mx-auto px-4 mt-6 max-w-4xl" itemScope itemType="https://schema.org/NewsArticle">
         {(post as any).categories && (
           <a href={`/category/${(post as any).categories.slug}`} className="inline-block bg-primary text-primary-foreground text-xs px-2 py-1 rounded mb-3">
             {(post as any).categories.name}
           </a>
         )}
 
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-4 leading-tight">{cleanText(post.title)}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-4 leading-tight" itemProp="headline">{cleanText(post.title)}</h1>
 
         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
           {post.source_name && <span>সোর্স: {post.source_name}</span>}

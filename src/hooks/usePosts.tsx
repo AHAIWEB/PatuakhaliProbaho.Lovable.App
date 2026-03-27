@@ -8,6 +8,7 @@ export const useFeaturedPosts = () =>
   useQuery({
     queryKey: ["posts", "featured"],
     queryFn: async () => {
+      // First try manually featured posts
       const { data, error } = await supabase
         .from("posts")
         .select("*")
@@ -16,7 +17,28 @@ export const useFeaturedPosts = () =>
         .order("published_at", { ascending: false })
         .limit(8);
       if (error) throw error;
-      return data;
+      if (data && data.length >= 3) return data;
+
+      // Fallback: auto-select latest posts with images as "lead news"
+      const { data: autoPosts, error: autoErr } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("status", "published")
+        .not("image_url", "is", null)
+        .order("published_at", { ascending: false })
+        .limit(8);
+      if (autoErr) throw autoErr;
+
+      // Merge: manual featured first, then auto-filled
+      const ids = new Set((data || []).map((p) => p.id));
+      const merged = [...(data || [])];
+      for (const p of autoPosts || []) {
+        if (!ids.has(p.id) && merged.length < 8) {
+          merged.push(p);
+          ids.add(p.id);
+        }
+      }
+      return merged;
     },
   });
 

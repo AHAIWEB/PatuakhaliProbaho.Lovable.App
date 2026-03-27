@@ -25,8 +25,8 @@ const FeaturedSlider = () => {
 
   if (items.length === 0) {
     return (
-      <div className="mb-6 aspect-[16/9] bg-muted rounded-sm flex items-center justify-center text-muted-foreground">
-        ফিচার্ড পোস্ট নেই — এডমিন প্যানেল থেকে ⭐ চিহ্ন দিয়ে ফিচার্ড করুন
+      <div className="mb-6 aspect-[16/9] bg-muted rounded-sm flex items-center justify-center text-muted-foreground text-sm">
+        সংবাদ লোড হচ্ছে...
       </div>
     );
   }
