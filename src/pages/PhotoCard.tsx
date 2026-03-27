@@ -966,7 +966,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 </div>
 
                 {/* Image layer toggle */}
-                {(uploadedPersonImage || uploadedFrameImage) && (
+                {(uploadedPersonImage || uploadedFrameImage || (fetchedImage && uploadedFrameImage)) && (
                   <div className="flex items-center gap-2 bg-muted/50 rounded p-2">
                     <Layers className="w-3.5 h-3.5 text-muted-foreground" />
                     <span className="text-[11px] font-medium">ছবি লেয়ার:</span>
