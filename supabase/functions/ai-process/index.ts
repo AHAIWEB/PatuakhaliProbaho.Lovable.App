@@ -10,21 +10,33 @@ Deno.serve(async (req) => {
 
   try {
     const { action, text } = await req.json();
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (action === "extract_quotes") {
-      // Extract quotes from title/text without AI
+      // Try AI first, fallback to local
+      if (LOVABLE_API_KEY && text) {
+        try {
+          const aiResult = await callAI(
+            LOVABLE_API_KEY,
+            `তুমি একজন বাংলা নিউজ এডিটর। নিচের টেক্সট থেকে সর্বোচ্চ ৩টি গুরুত্বপূর্ণ কোটেশন বের করো। শুধু JSON ফরম্যাটে উত্তর দাও: {"quotes": ["...", "..."]}`,
+            text
+          );
+          const parsed = JSON.parse(aiResult);
+          if (parsed.quotes?.length) {
+            return jsonResponse({ quotes: parsed.quotes });
+          }
+        } catch { /* fallback below */ }
+      }
+
+      // Fallback: local extraction
       const input = (text || "").trim();
       const quotes: string[] = [];
-
       if (input) {
-        // Split by common delimiters and use meaningful segments as quotes
         const sentences = input
           .split(/[।\.\!\?\n]+/)
           .map((s: string) => s.trim())
           .filter((s: string) => s.length > 5);
-
         if (sentences.length > 0) {
-          // Use up to 3 sentences as quotes
           for (let i = 0; i < Math.min(3, sentences.length); i++) {
             quotes.push(`"${sentences[i]}"`);
           }
@@ -32,16 +44,29 @@ Deno.serve(async (req) => {
           quotes.push(`"${input.substring(0, 100)}"`);
         }
       }
-
-      return new Response(JSON.stringify({ quotes }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ quotes });
     }
 
     if (action === "categorize") {
-      // Simple keyword-based categorization without AI
+      // Try AI first
+      if (LOVABLE_API_KEY && text) {
+        try {
+          const aiResult = await callAI(
+            LOVABLE_API_KEY,
+            `তুমি একজন বাংলা নিউজ ক্যাটাগরাইজার। নিচের টেক্সটের ক্যাটাগরি, ট্যাগ এবং সারসংক্ষেপ বের করো। 
+ক্যাটাগরি অবশ্যই এগুলোর মধ্যে হতে হবে: sports, politics, international, entertainment, economy, education, technology, health, crime, national
+শুধু JSON ফরম্যাটে উত্তর দাও: {"category": "...", "tags": ["...", "..."], "summary": "..."}`,
+            text
+          );
+          const parsed = JSON.parse(aiResult);
+          if (parsed.category) {
+            return jsonResponse(parsed);
+          }
+        } catch { /* fallback below */ }
+      }
+
+      // Fallback: keyword-based
       const input = (text || "").toLowerCase();
-      
       const categoryMap: Record<string, string[]> = {
         sports: ["খেলা", "ক্রিকেট", "ফুটবল", "sports", "cricket", "football", "match"],
         politics: ["রাজনীতি", "সরকার", "মন্ত্রী", "politics", "government", "election", "নির্বাচন"],
@@ -54,20 +79,12 @@ Deno.serve(async (req) => {
         crime: ["অপরাধ", "হত্যা", "crime", "murder", "police", "পুলিশ"],
         national: ["জাতীয়", "বাংলাদেশ", "national", "bangladesh", "দেশ"],
       };
-
       let category = "national";
       for (const [cat, keywords] of Object.entries(categoryMap)) {
-        if (keywords.some(k => input.includes(k))) {
-          category = cat;
-          break;
-        }
+        if (keywords.some(k => input.includes(k))) { category = cat; break; }
       }
-
       const summary = text ? text.substring(0, 120) + "..." : "";
-
-      return new Response(JSON.stringify({ category, tags: [], summary }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ category, tags: [], summary });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {
@@ -81,3 +98,30 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function jsonResponse(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function callAI(apiKey: string, systemPrompt: string, userText: string): Promise<string> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-lite",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userText },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!resp.ok) throw new Error(`AI API error: ${resp.status}`);
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || "";
+}
