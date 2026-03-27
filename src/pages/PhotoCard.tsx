@@ -354,7 +354,30 @@ const PhotoCard = () => {
     ctx.restore();
   };
 
-  // Capitalize first letter helper
+  // Get first grapheme cluster (handles Bengali conjuncts like প্র, স্ব, etc.)
+  const getFirstGrapheme = (text: string): { first: string; rest: string } => {
+    if (!text) return { first: "", rest: "" };
+    // Use Intl.Segmenter if available for proper grapheme segmentation
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+      const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+      const segments = [...segmenter.segment(text)];
+      if (segments.length === 0) return { first: "", rest: "" };
+      return { first: segments[0].segment, rest: segments.slice(1).map(s => s.segment).join("") };
+    }
+    // Fallback: find the first complete Bengali syllable/conjunct
+    // Bengali combining marks: \u09BE-\u09CC (vowel signs), \u09CD (hasanta/virama), \u09D7 (au length mark)
+    let i = 1;
+    while (i < text.length) {
+      const code = text.charCodeAt(i);
+      // Continue if it's a combining mark (vowel sign, hasanta, or followed by consonant after hasanta)
+      if (code >= 0x09BE && code <= 0x09CC) { i++; continue; }
+      if (code === 0x09CD) { i += 2; continue; } // hasanta + next consonant
+      if (code === 0x09D7) { i++; continue; }
+      break;
+    }
+    return { first: text.slice(0, i), rest: text.slice(i) };
+  };
+
   const capitalizeFirst = (text: string) => {
     if (!text) return text;
     return text.charAt(0).toUpperCase() + text.slice(1);
@@ -382,9 +405,11 @@ const PhotoCard = () => {
       ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
     }
 
-    // Layer order: if imageInFront=false, draw person first, then frame. Otherwise frame first, then person.
+    // Layer order: if imageInFront=false, draw content image first, then frame. Otherwise frame first, then image.
     const drawPersonLayer = async () => {
-      if (uploadedPersonImage) {
+      // Draw person image OR fetched image as a layered element (not just bg)
+      const personSrc = uploadedPersonImage;
+      if (personSrc) {
         try {
           const personImg = await loadImage(uploadedPersonImage);
           const size = Math.round(W * (personSize / 100));
@@ -504,9 +529,8 @@ const PhotoCard = () => {
       ctx.fillStyle = titleColor;
       ctx.textAlign = "left";
 
-      // Drop cap: first character larger
-      const firstChar = title.charAt(0);
-      const restText = title.slice(1);
+      // Drop cap: first grapheme cluster (handles Bengali conjuncts)
+      const { first: firstChar, rest: restText } = getFirstGrapheme(title);
       const dropCapSize = Math.round(tSize * 1.6);
 
       ctx.font = `bold ${dropCapSize}px 'Hind Siliguri', sans-serif`;
@@ -536,8 +560,7 @@ const PhotoCard = () => {
       ctx.fillStyle = quoteColor;
       ctx.textAlign = "left";
 
-      const firstChar = quote.charAt(0);
-      const restText = quote.slice(1);
+      const { first: firstChar, rest: restText } = getFirstGrapheme(quote);
       const dropCapSize = Math.round(qSize * 1.5);
       const startX = Math.max(40, quoteX - maxW / 2);
       let y = quoteY;
