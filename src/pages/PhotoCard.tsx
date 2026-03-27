@@ -358,11 +358,11 @@ const PhotoCard = () => {
   const getFirstGrapheme = (text: string): { first: string; rest: string } => {
     if (!text) return { first: "", rest: "" };
     // Use Intl.Segmenter if available for proper grapheme segmentation
-    if (typeof Intl !== "undefined" && Intl.Segmenter) {
-      const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    if (typeof Intl !== "undefined" && (Intl as any).Segmenter) {
+      const segmenter = new (Intl as any).Segmenter(undefined, { granularity: "grapheme" });
       const segments = [...segmenter.segment(text)];
       if (segments.length === 0) return { first: "", rest: "" };
-      return { first: segments[0].segment, rest: segments.slice(1).map(s => s.segment).join("") };
+      return { first: segments[0].segment, rest: segments.slice(1).map((s: any) => s.segment).join("") };
     }
     // Fallback: find the first complete Bengali syllable/conjunct
     // Bengali combining marks: \u09BE-\u09CC (vowel signs), \u09CD (hasanta/virama), \u09D7 (au length mark)
