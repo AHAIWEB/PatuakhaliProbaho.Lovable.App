@@ -106,6 +106,9 @@ const PhotoCard = () => {
   const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [postingToSite, setPostingToSite] = useState(false);
+  const [aiCategory, setAiCategory] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiTags, setAiTags] = useState<string[]>([]);
 
   const extractQuotesLocally = useCallback((text: string) => {
     const cleaned = text.replace(/^শিরোনাম\s*:\s*/i, "").replace(/\s+/g, " ").trim();
@@ -235,6 +238,20 @@ const PhotoCard = () => {
     setAiLoading(false);
   };
 
+  const handleAiCategorize = async (text: string) => {
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-process", { body: { action: "categorize", text } });
+      if (error) throw error;
+      if (data?.category) setAiCategory(data.category);
+      if (data?.summary) setAiSummary(data.summary);
+      if (data?.tags?.length) setAiTags(data.tags);
+      toast({ title: "✅ ক্যাটাগরি নির্ধারণ হয়েছে", description: `ক্যাটাগরি: ${data?.category || "national"}` });
+    } catch {
+      toast({ title: "ক্যাটাগরি নির্ধারণ ব্যর্থ", variant: "destructive" });
+    }
+  };
+
   const handleFetchUrl = async () => {
     if (!fetchUrl) return;
     setUrlFetching(true);
@@ -354,7 +371,30 @@ const PhotoCard = () => {
     ctx.restore();
   };
 
-  // Capitalize first letter helper
+  // Get first grapheme cluster (handles Bengali conjuncts like প্র, স্ব, etc.)
+  const getFirstGrapheme = (text: string): { first: string; rest: string } => {
+    if (!text) return { first: "", rest: "" };
+    // Use Intl.Segmenter if available for proper grapheme segmentation
+    if (typeof Intl !== "undefined" && (Intl as any).Segmenter) {
+      const segmenter = new (Intl as any).Segmenter(undefined, { granularity: "grapheme" });
+      const segments = [...segmenter.segment(text)];
+      if (segments.length === 0) return { first: "", rest: "" };
+      return { first: segments[0].segment, rest: segments.slice(1).map((s: any) => s.segment).join("") };
+    }
+    // Fallback: find the first complete Bengali syllable/conjunct
+    // Bengali combining marks: \u09BE-\u09CC (vowel signs), \u09CD (hasanta/virama), \u09D7 (au length mark)
+    let i = 1;
+    while (i < text.length) {
+      const code = text.charCodeAt(i);
+      // Continue if it's a combining mark (vowel sign, hasanta, or followed by consonant after hasanta)
+      if (code >= 0x09BE && code <= 0x09CC) { i++; continue; }
+      if (code === 0x09CD) { i += 2; continue; } // hasanta + next consonant
+      if (code === 0x09D7) { i++; continue; }
+      break;
+    }
+    return { first: text.slice(0, i), rest: text.slice(i) };
+  };
+
   const capitalizeFirst = (text: string) => {
     if (!text) return text;
     return text.charAt(0).toUpperCase() + text.slice(1);
@@ -363,8 +403,12 @@ const PhotoCard = () => {
   const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
     const { W, H } = getCanvasSize();
 
+    // Determine if fetched image should be treated as a layered content image
+    // (when custom frame is uploaded and no separate bg image)
+    const fetchedAsLayer = !uploadedBgImage && fetchedImage && uploadedFrameImage;
+
     // Background
-    const bgSrc = uploadedBgImage || fetchedImage;
+    const bgSrc = fetchedAsLayer ? null : (uploadedBgImage || fetchedImage);
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
@@ -382,8 +426,18 @@ const PhotoCard = () => {
       ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
     }
 
-    // Layer order: if imageInFront=false, draw person first, then frame. Otherwise frame first, then person.
+    // Layer order: if imageInFront=true, draw frame first then image. Otherwise image first then frame.
     const drawPersonLayer = async () => {
+      // Draw fetched image as layer if applicable
+      if (fetchedAsLayer && fetchedImage) {
+        try {
+          const fetchImg = await loadImage(fetchedImage);
+          const scale = Math.max(W / fetchImg.width, H / fetchImg.height);
+          const sw = fetchImg.width * scale, sh = fetchImg.height * scale;
+          ctx.drawImage(fetchImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
+        } catch { /* failed */ }
+      }
+      // Draw person image
       if (uploadedPersonImage) {
         try {
           const personImg = await loadImage(uploadedPersonImage);
@@ -504,9 +558,8 @@ const PhotoCard = () => {
       ctx.fillStyle = titleColor;
       ctx.textAlign = "left";
 
-      // Drop cap: first character larger
-      const firstChar = title.charAt(0);
-      const restText = title.slice(1);
+      // Drop cap: first grapheme cluster (handles Bengali conjuncts)
+      const { first: firstChar, rest: restText } = getFirstGrapheme(title);
       const dropCapSize = Math.round(tSize * 1.6);
 
       ctx.font = `bold ${dropCapSize}px 'Hind Siliguri', sans-serif`;
@@ -536,8 +589,7 @@ const PhotoCard = () => {
       ctx.fillStyle = quoteColor;
       ctx.textAlign = "left";
 
-      const firstChar = quote.charAt(0);
-      const restText = quote.slice(1);
+      const { first: firstChar, rest: restText } = getFirstGrapheme(quote);
       const dropCapSize = Math.round(qSize * 1.5);
       const startX = Math.max(40, quoteX - maxW / 2);
       let y = quoteY;
@@ -887,6 +939,27 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                     </div>
                   </div>
                 )}
+                {/* AI Categorize button */}
+                {customTitle && (
+                  <div className="space-y-1">
+                    <Button onClick={() => handleAiCategorize(customTitle + (customQuote ? "\n" + customQuote : ""))} 
+                      disabled={aiLoading} variant="outline" size="sm" className="h-8 text-xs w-full">
+                      <Sparkles className={`w-3 h-3 mr-1 ${aiLoading ? "animate-spin" : ""}`} />
+                      {aiLoading ? "প্রসেসিং..." : "🤖 AI ক্যাটাগরি ও ট্যাগ"}
+                    </Button>
+                    {aiCategory && (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">📂 {aiCategory}</span>
+                        {aiTags.map((tag, i) => (
+                          <span key={i} className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">#{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    {aiSummary && (
+                      <p className="text-[10px] text-muted-foreground leading-tight bg-muted/50 rounded p-1.5">{aiSummary}</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -943,7 +1016,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 </div>
 
                 {/* Image layer toggle */}
-                {(uploadedPersonImage || uploadedFrameImage) && (
+                {(uploadedPersonImage || uploadedFrameImage || (fetchedImage && uploadedFrameImage)) && (
                   <div className="flex items-center gap-2 bg-muted/50 rounded p-2">
                     <Layers className="w-3.5 h-3.5 text-muted-foreground" />
                     <span className="text-[11px] font-medium">ছবি লেয়ার:</span>
