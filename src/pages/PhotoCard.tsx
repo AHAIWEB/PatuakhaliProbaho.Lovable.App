@@ -106,6 +106,9 @@ const PhotoCard = () => {
   const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [postingToSite, setPostingToSite] = useState(false);
+  const [aiCategory, setAiCategory] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiTags, setAiTags] = useState<string[]>([]);
 
   const extractQuotesLocally = useCallback((text: string) => {
     const cleaned = text.replace(/^শিরোনাম\s*:\s*/i, "").replace(/\s+/g, " ").trim();
@@ -233,6 +236,20 @@ const PhotoCard = () => {
       toast({ title: "✅ কোটেশন তৈরি হয়েছে", description: fb.length ? "Fallback extraction ব্যবহার করা হয়েছে" : "কোটেশন তৈরি করা যায়নি" });
     }
     setAiLoading(false);
+  };
+
+  const handleAiCategorize = async (text: string) => {
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-process", { body: { action: "categorize", text } });
+      if (error) throw error;
+      if (data?.category) setAiCategory(data.category);
+      if (data?.summary) setAiSummary(data.summary);
+      if (data?.tags?.length) setAiTags(data.tags);
+      toast({ title: "✅ ক্যাটাগরি নির্ধারণ হয়েছে", description: `ক্যাটাগরি: ${data?.category || "national"}` });
+    } catch {
+      toast({ title: "ক্যাটাগরি নির্ধারণ ব্যর্থ", variant: "destructive" });
+    }
   };
 
   const handleFetchUrl = async () => {
