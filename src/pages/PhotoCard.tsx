@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles } from "lucide-react";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Post = Tables<"posts">;
@@ -47,6 +48,7 @@ const builtInFrames = [
 
 const PhotoCard = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -92,6 +94,7 @@ const PhotoCard = () => {
 
   const [extractedQuotes, setExtractedQuotes] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [postingToSite, setPostingToSite] = useState(false);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -116,6 +119,10 @@ const PhotoCard = () => {
     setFetchedImage(post.image_url || "");
     setCustomQuote("");
     setQrUrl(post.source_url || "");
+    // Auto extract AI quotes from title
+    if (post.title) {
+      handleAiQuotes(post.title);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -206,12 +213,12 @@ const PhotoCard = () => {
     }
   }, [uploadedPersonImage, toast]);
 
-  // AI quote extraction
+  // AI quote extraction - now from title/headline
   const handleAiQuotes = async (text: string) => {
     setAiLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("ai-process", {
-        body: { action: "extract_quotes", text },
+        body: { action: "extract_quotes", text: `শিরোনাম: ${text}\n\nএই শিরোনাম থেকে মূল বক্তব্য, কোটেশন বা গুরুত্বপূর্ণ অংশ বের করো।` },
       });
       if (error) throw error;
       if (data?.quotes?.length) {
@@ -671,6 +678,52 @@ const PhotoCard = () => {
     } catch { downloadCard(); }
   };
 
+  // Post card as a new post to the site
+  const postToSite = async () => {
+    if (!preview || !customTitle) {
+      toast({ title: "শিরোনাম ও প্রিভিউ প্রয়োজন", variant: "destructive" });
+      return;
+    }
+    setPostingToSite(true);
+    try {
+      const slug = customTitle.replace(/[^\u0980-\u09FFa-zA-Z0-9\s]/g, "").replace(/\s+/g, "-").toLowerCase() + "-" + Date.now();
+      const { error } = await supabase.from("posts").insert({
+        title: customTitle,
+        slug,
+        content: customQuote || customTitle,
+        excerpt: customQuote || customTitle.substring(0, 200),
+        image_url: fetchedImage || preview,
+        status: "published",
+        published_at: new Date().toISOString(),
+        author_id: user?.id || null,
+        source_url: qrUrl || null,
+        tags: ["ফটোকার্ড"],
+      });
+      if (error) throw error;
+      toast({ title: "✅ সাইটে পোস্ট হয়েছে!", description: "পোস্টটি সফলভাবে প্রকাশিত হয়েছে" });
+    } catch (e: any) {
+      toast({ title: "পোস্ট ব্যর্থ", description: e.message, variant: "destructive" });
+    }
+    setPostingToSite(false);
+  };
+
+  // Share to Blogger
+  const shareToBlogger = () => {
+    if (!customTitle) return;
+    const bloggerUrl = new URL("https://www.blogger.com/blog-this.g");
+    const body = `<div style="text-align:center;">
+${fetchedImage ? `<img src="${fetchedImage}" alt="${customTitle}" style="max-width:100%;border-radius:8px;" />` : ""}
+<h2>${customTitle}</h2>
+${customQuote ? `<blockquote>${customQuote}</blockquote>` : ""}
+${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত পড়ুন</a></p>` : ""}
+<p style="font-size:12px;color:#888;">সূত্র: পটুয়াখালী প্রবাহ</p>
+</div>`;
+    bloggerUrl.searchParams.set("n", customTitle);
+    bloggerUrl.searchParams.set("t", body);
+    if (qrUrl) bloggerUrl.searchParams.set("u", qrUrl);
+    window.open(bloggerUrl.toString(), "_blank", "width=700,height=600");
+  };
+
   // ======= Pointer-based Drag (touch + mouse) =======
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!uploadedPersonImage) return;
@@ -941,9 +994,15 @@ const PhotoCard = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5 flex-wrap">
                       <Button onClick={downloadCard} className="flex-1 h-9" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
                       <Button onClick={shareCard} variant="outline" className="flex-1 h-9" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
+                      <Button onClick={postToSite} disabled={postingToSite} variant="secondary" className="flex-1 h-9" size="sm">
+                        <Send className="w-4 h-4 mr-1" />{postingToSite ? "পোস্ট হচ্ছে..." : "সাইটে পোস্ট"}
+                      </Button>
+                      <Button onClick={shareToBlogger} variant="outline" className="flex-1 h-9" size="sm">
+                        <Globe className="w-4 h-4 mr-1" />ব্লগার শেয়ার
+                      </Button>
                     </div>
                   </div>
                 ) : (
