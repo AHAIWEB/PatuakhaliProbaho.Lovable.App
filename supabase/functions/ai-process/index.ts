@@ -9,63 +9,27 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { action, text, url } = await req.json();
+    const { action, text } = await req.json();
 
     if (action === "extract_quotes") {
-      // Use AI to extract quotations from article text
-      const prompt = `নিচের আর্টিকেল থেকে সবচেয়ে গুরুত্বপূর্ণ ৩-৫টি কোটেশন/উক্তি বের করো। শুধু JSON array হিসেবে দাও, কোনো ব্যাখ্যা নয়।
-যদি কোনো কোটেশন না পাও তাহলে আর্টিকেলের মূল বক্তব্য থেকে ৩টি ছোট বাক্য বের করো।
+      // Extract quotes from title/text without AI
+      const input = (text || "").trim();
+      const quotes: string[] = [];
 
-আর্টিকেল:
-${text?.substring(0, 3000)}
+      if (input) {
+        // Split by common delimiters and use meaningful segments as quotes
+        const sentences = input
+          .split(/[।\.\!\?\n]+/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 5);
 
-Response format: ["quote1", "quote2", "quote3"]`;
-
-      const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "You extract quotes from Bengali/English news articles. Always respond with a valid JSON array of strings." },
-            { role: "user", content: prompt },
-          ],
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`AI API error ${response.status}: ${errText}`);
-      }
-
-      const aiData = await response.json();
-      const content = aiData.choices?.[0]?.message?.content || "[]";
-      
-      // Parse quotes from AI response
-      let quotes: string[] = [];
-      try {
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          quotes = parsed;
-        } else if (parsed.quotes && Array.isArray(parsed.quotes)) {
-          quotes = parsed.quotes;
-        }
-      } catch {
-        // Try to extract array from text
-        const match = content.match(/\[[\s\S]*\]/);
-        if (match) {
-          try { quotes = JSON.parse(match[0]); } catch { /* fallback */ }
+        if (sentences.length > 0) {
+          // Use up to 3 sentences as quotes
+          for (let i = 0; i < Math.min(3, sentences.length); i++) {
+            quotes.push(`"${sentences[i]}"`);
+          }
+        } else {
+          quotes.push(`"${input.substring(0, 100)}"`);
         }
       }
 
@@ -75,40 +39,33 @@ Response format: ["quote1", "quote2", "quote3"]`;
     }
 
     if (action === "categorize") {
-      const prompt = `এই নিউজ আর্টিকেলের জন্য সবচেয়ে উপযুক্ত ক্যাটাগরি এবং ৫টি ট্যাগ দাও।
+      // Simple keyword-based categorization without AI
+      const input = (text || "").toLowerCase();
+      
+      const categoryMap: Record<string, string[]> = {
+        sports: ["খেলা", "ক্রিকেট", "ফুটবল", "sports", "cricket", "football", "match"],
+        politics: ["রাজনীতি", "সরকার", "মন্ত্রী", "politics", "government", "election", "নির্বাচন"],
+        international: ["আন্তর্জাতিক", "বিশ্ব", "international", "world", "global"],
+        entertainment: ["বিনোদন", "সিনেমা", "নাটক", "entertainment", "movie", "drama"],
+        economy: ["অর্থনীতি", "ব্যবসা", "economy", "business", "market", "বাজার"],
+        education: ["শিক্ষা", "বিশ্ববিদ্যালয়", "education", "university", "school", "স্কুল"],
+        technology: ["প্রযুক্তি", "technology", "tech", "digital", "ডিজিটাল"],
+        health: ["স্বাস্থ্য", "health", "hospital", "হাসপাতাল", "চিকিৎসা"],
+        crime: ["অপরাধ", "হত্যা", "crime", "murder", "police", "পুলিশ"],
+        national: ["জাতীয়", "বাংলাদেশ", "national", "bangladesh", "দেশ"],
+      };
 
-শিরোনাম: ${text?.substring(0, 500)}
-
-ক্যাটাগরি অপশন: national, politics, international, sports, entertainment, economy, education, technology, health, lifestyle, religion, travel, trending, crime
-
-JSON format: {"category": "...", "tags": ["tag1", "tag2"], "summary": "২ বাক্যে সারাংশ"}`;
-
-      const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
-          messages: [
-            { role: "system", content: "You categorize Bengali/English news. Respond only with valid JSON." },
-            { role: "user", content: prompt },
-          ],
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`AI API error ${response.status}`);
+      let category = "national";
+      for (const [cat, keywords] of Object.entries(categoryMap)) {
+        if (keywords.some(k => input.includes(k))) {
+          category = cat;
+          break;
+        }
       }
 
-      const aiData = await response.json();
-      const content = aiData.choices?.[0]?.message?.content || "{}";
-      let result = {};
-      try { result = JSON.parse(content); } catch { /* fallback */ }
+      const summary = text ? text.substring(0, 120) + "..." : "";
 
-      return new Response(JSON.stringify(result), {
+      return new Response(JSON.stringify({ category, tags: [], summary }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
