@@ -2,11 +2,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { LogIn, User, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logo from "@/assets/logo.png";
+import defaultLogo from "@/assets/logo.png";
+import { useSiteSetting } from "@/hooks/useSiteSettings";
 
 const Header = () => {
   const { user, userRole, loading, signOut } = useAuth();
-
+  const { data: customLogo } = useSiteSetting("site_logo");
+  const logo = customLogo || defaultLogo;
   return (
     <header className="bg-card border-b border-border py-2 sm:py-4">
       <div className="container mx-auto px-3 sm:px-4 flex items-center justify-between">
