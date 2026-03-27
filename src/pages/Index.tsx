@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import CategoryNav from "@/components/CategoryNav";
 import NewsTicker from "@/components/NewsTicker";
 import FeaturedSlider from "@/components/FeaturedSlider";
+import PhotoCardCarousel from "@/components/PhotoCardCarousel";
 import NewsCard from "@/components/NewsCard";
 import SectionTitle from "@/components/SectionTitle";
 import AdSpace from "@/components/AdSpace";
@@ -250,6 +251,7 @@ const Index = () => {
           {/* ========= MAIN - Pinterest Masonry ========= */}
           <div className="lg:col-span-6 order-1 lg:order-2">
             <FeaturedSlider />
+            <PhotoCardCarousel />
 
             {/* Highlighted - masonry 2 cols */}
             {(highlightedPosts ?? []).length > 0 && sc("highlighted") > 0 && (
