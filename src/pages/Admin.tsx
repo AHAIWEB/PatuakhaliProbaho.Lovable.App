@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image } from "lucide-react";
+import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
 import { cleanText } from "@/lib/content";
 import { useLayoutSettings, useUpdateLayoutSetting } from "@/hooks/useLayoutSettings";
@@ -469,6 +470,9 @@ const Admin = () => {
             </TabsTrigger>
             <TabsTrigger value="layout" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
               <Settings2 className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />লেআউট
+            </TabsTrigger>
+            <TabsTrigger value="site-settings" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Image className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />সাইট
             </TabsTrigger>
           </TabsList>
 
@@ -989,6 +993,10 @@ const Admin = () => {
           <TabsContent value="layout">
             <LayoutSettingsTab />
           </TabsContent>
+          {/* Site Settings Tab */}
+          <TabsContent value="site-settings">
+            <SiteSettingsTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
@@ -1043,6 +1051,73 @@ const LayoutSettingsTab = () => {
             </div>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+};
+
+const SiteSettingsTab = () => {
+  const { data: logoUrl, isLoading } = useSiteSetting("site_logo");
+  const updateSetting = useUpdateSiteSetting();
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `logo/site-logo.${ext}`;
+      
+      // Remove old logo if exists
+      await supabase.storage.from("site-assets").remove([path]);
+      
+      const { error: uploadError } = await supabase.storage
+        .from("site-assets")
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("site-assets")
+        .getPublicUrl(path);
+
+      await updateSetting.mutateAsync({ key: "site_logo", value: urlData.publicUrl });
+      toast({ title: "লোগো আপলোড সফল!" });
+    } catch (err: any) {
+      toast({ title: "আপলোড ব্যর্থ", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="p-3 sm:p-6">
+        <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+          <Image className="w-4 h-4" /> সাইট সেটিংস
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">সাইট লোগো</p>
+          {isLoading ? (
+            <div className="w-32 h-16 bg-muted animate-pulse rounded" />
+          ) : logoUrl ? (
+            <img src={logoUrl} alt="সাইট লোগো" className="h-16 w-auto rounded border border-border p-1" />
+          ) : (
+            <p className="text-xs text-muted-foreground">কোনো লোগো আপলোড করা হয়নি (ডিফল্ট ব্যবহার হচ্ছে)</p>
+          )}
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+            <Button variant="outline" size="sm" disabled={uploading} asChild>
+              <span>
+                <Upload className="w-3.5 h-3.5 mr-1" />
+                {uploading ? "আপলোড হচ্ছে..." : "লোগো আপলোড"}
+              </span>
+            </Button>
+          </label>
+        </div>
       </CardContent>
     </Card>
   );
