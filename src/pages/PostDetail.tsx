@@ -104,7 +104,7 @@ const PostDetail = () => {
       <Header />
       <CategoryNav />
 
-      <main className="container mx-auto px-4 mt-6 max-w-4xl">
+      <main className="container mx-auto px-4 mt-6 max-w-4xl" itemScope itemType="https://schema.org/NewsArticle">
         {(post as any).categories && (
           <a href={`/category/${(post as any).categories.slug}`} className="inline-block bg-primary text-primary-foreground text-xs px-2 py-1 rounded mb-3">
             {(post as any).categories.name}
