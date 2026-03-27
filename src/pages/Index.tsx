@@ -32,15 +32,46 @@ const useCategoryPosts = (slug: string, limit = 4) =>
         .eq("slug", slug)
         .maybeSingle();
       if (!cat) return [];
+
+      // Get sub-category IDs too
+      const { data: subCats } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("parent_id", cat.id);
+      const allCatIds = [cat.id, ...(subCats || []).map((c) => c.id)];
+
+      // First: posts with matching category_id
       const { data, error } = await supabase
         .from("posts")
         .select("*")
-        .eq("category_id", cat.id)
+        .in("category_id", allCatIds)
         .eq("status", "published")
         .order("published_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
-      return data ?? [];
+
+      // If enough posts, return them
+      if ((data ?? []).length >= limit) return data ?? [];
+
+      // Fallback: also match by source_category or tags
+      const { data: fallback } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("status", "published")
+        .or(`source_category.eq.${slug},tags.cs.{${slug}}`)
+        .order("published_at", { ascending: false })
+        .limit(limit);
+
+      // Merge without duplicates
+      const ids = new Set((data ?? []).map((p) => p.id));
+      const merged = [...(data ?? [])];
+      for (const p of fallback ?? []) {
+        if (!ids.has(p.id) && merged.length < limit) {
+          merged.push(p);
+          ids.add(p.id);
+        }
+      }
+      return merged;
     },
   });
 
