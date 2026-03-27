@@ -386,8 +386,12 @@ const PhotoCard = () => {
   const drawTemplate = async (ctx: CanvasRenderingContext2D) => {
     const { W, H } = getCanvasSize();
 
+    // Determine if fetched image should be treated as a layered content image
+    // (when custom frame is uploaded and no separate bg image)
+    const fetchedAsLayer = !uploadedBgImage && fetchedImage && uploadedFrameImage;
+
     // Background
-    const bgSrc = uploadedBgImage || fetchedImage;
+    const bgSrc = fetchedAsLayer ? null : (uploadedBgImage || fetchedImage);
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
@@ -405,11 +409,19 @@ const PhotoCard = () => {
       ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
     }
 
-    // Layer order: if imageInFront=false, draw content image first, then frame. Otherwise frame first, then image.
+    // Layer order: if imageInFront=true, draw frame first then image. Otherwise image first then frame.
     const drawPersonLayer = async () => {
-      // Draw person image OR fetched image as a layered element (not just bg)
-      const personSrc = uploadedPersonImage;
-      if (personSrc) {
+      // Draw fetched image as layer if applicable
+      if (fetchedAsLayer && fetchedImage) {
+        try {
+          const fetchImg = await loadImage(fetchedImage);
+          const scale = Math.max(W / fetchImg.width, H / fetchImg.height);
+          const sw = fetchImg.width * scale, sh = fetchImg.height * scale;
+          ctx.drawImage(fetchImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
+        } catch { /* failed */ }
+      }
+      // Draw person image
+      if (uploadedPersonImage) {
         try {
           const personImg = await loadImage(uploadedPersonImage);
           const size = Math.round(W * (personSize / 100));
