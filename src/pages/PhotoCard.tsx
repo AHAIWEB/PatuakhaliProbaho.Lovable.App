@@ -939,6 +939,27 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                     </div>
                   </div>
                 )}
+                {/* AI Categorize button */}
+                {customTitle && (
+                  <div className="space-y-1">
+                    <Button onClick={() => handleAiCategorize(customTitle + (customQuote ? "\n" + customQuote : ""))} 
+                      disabled={aiLoading} variant="outline" size="sm" className="h-8 text-xs w-full">
+                      <Sparkles className={`w-3 h-3 mr-1 ${aiLoading ? "animate-spin" : ""}`} />
+                      {aiLoading ? "প্রসেসিং..." : "🤖 AI ক্যাটাগরি ও ট্যাগ"}
+                    </Button>
+                    {aiCategory && (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">📂 {aiCategory}</span>
+                        {aiTags.map((tag, i) => (
+                          <span key={i} className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">#{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    {aiSummary && (
+                      <p className="text-[10px] text-muted-foreground leading-tight bg-muted/50 rounded p-1.5">{aiSummary}</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
