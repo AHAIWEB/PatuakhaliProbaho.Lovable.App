@@ -96,6 +96,41 @@ const PhotoCard = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [postingToSite, setPostingToSite] = useState(false);
 
+  const extractQuotesLocally = useCallback((text: string) => {
+    const cleaned = text
+      .replace(/^শিরোনাম\s*:\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleaned) return [];
+
+    const directQuotes = Array.from(cleaned.matchAll(/["“”'‘’❝❞]([^"“”'‘’❝❞]{6,180})["“”'‘’❝❞]/g))
+      .map((match) => `"${match[1].trim()}"`);
+
+    if (directQuotes.length) return directQuotes.slice(0, 3);
+
+    const parts = cleaned
+      .split(/[।!?]| - | — |:|;/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 8);
+
+    if (parts.length === 0) return [`"${cleaned.slice(0, 140)}"`];
+
+    return parts.slice(0, 3).map((part) => `"${part}"`);
+  }, []);
+
+  const getImageProxyUrl = useCallback((src: string) => {
+    if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+
+    try {
+      const parsed = new URL(src, window.location.origin);
+      if (parsed.origin === window.location.origin) return parsed.toString();
+      return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(parsed.toString())}`;
+    } catch {
+      return src;
+    }
+  }, []);
+
   useEffect(() => {
     const title = searchParams.get("title");
     const image = searchParams.get("image");
@@ -218,17 +253,25 @@ const PhotoCard = () => {
     setAiLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("ai-process", {
-        body: { action: "extract_quotes", text: `শিরোনাম: ${text}\n\nএই শিরোনাম থেকে মূল বক্তব্য, কোটেশন বা গুরুত্বপূর্ণ অংশ বের করো।` },
+        body: { action: "extract_quotes", text },
       });
       if (error) throw error;
       if (data?.quotes?.length) {
         setExtractedQuotes(data.quotes);
         toast({ title: "✅ AI কোটেশন", description: `${data.quotes.length}টি কোটেশন পাওয়া গেছে` });
       } else {
-        toast({ title: "কোনো কোটেশন পাওয়া যায়নি" });
+        const fallbackQuotes = extractQuotesLocally(text);
+        setExtractedQuotes(fallbackQuotes);
+        toast({ title: "✅ কোটেশন তৈরি হয়েছে", description: `${fallbackQuotes.length}টি কোটেশন পাওয়া গেছে` });
       }
     } catch (e: any) {
-      toast({ title: "AI ত্রুটি", description: e.message, variant: "destructive" });
+      const fallbackQuotes = extractQuotesLocally(text);
+      setExtractedQuotes(fallbackQuotes);
+      toast({
+        title: "✅ কোটেশন তৈরি হয়েছে",
+        description: fallbackQuotes.length ? "Fallback extraction ব্যবহার করা হয়েছে" : (e?.message || "কোটেশন তৈরি করা যায়নি"),
+        variant: fallbackQuotes.length ? "default" : "destructive",
+      });
     }
     setAiLoading(false);
   };
@@ -255,14 +298,20 @@ const PhotoCard = () => {
     setUrlFetching(false);
   };
 
-  const loadImage = (src: string): Promise<HTMLImageElement> =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = src;
-    });
+  const loadImage = useCallback((src: string): Promise<HTMLImageElement> => {
+    const tryLoad = (imageSrc: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.referrerPolicy = "no-referrer";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load image: ${imageSrc}`));
+        img.src = imageSrc;
+      });
+
+    const proxiedSrc = getImageProxyUrl(src);
+    return tryLoad(src).catch(() => proxiedSrc !== src ? tryLoad(proxiedSrc) : Promise.reject(new Error("Image load failed")));
+  }, [getImageProxyUrl]);
 
   const generateQRDataUrl = (text: string, size = 150): string => {
     const canvas = document.createElement("canvas");
