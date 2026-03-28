@@ -14,7 +14,7 @@ import {
   usePostsByDivision,
   useNationalPosts,
   useMostViewedPosts,
-  useHighlightedPosts,
+  usePostsRealtime,
 } from "@/hooks/usePosts";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,6 +155,9 @@ const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }
 };
 
 const Index = () => {
+  // Enable realtime updates for all post queries
+  usePostsRealtime();
+
   const { data: layoutSettings } = useLayoutSettings();
   const ls = layoutSettings ?? [];
   const sc = (key: string, fb = 5) => getSectionCount(ls, key, fb);
