@@ -1,9 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useEffect } from "react";
 
 export type Post = Tables<"posts">;
 
+// Realtime hook - invalidates all post queries when posts change
+export const usePostsRealtime = () => {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("posts-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["posts"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+};
 export const useFeaturedPosts = () =>
   useQuery({
     queryKey: ["posts", "featured"],

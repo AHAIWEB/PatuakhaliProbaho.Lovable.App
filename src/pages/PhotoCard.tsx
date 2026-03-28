@@ -297,6 +297,11 @@ const PhotoCard = () => {
         img.src = imageSrc;
       });
     const proxiedSrc = getImageProxyUrl(src);
+    // For external images, try proxy first (more reliable for CORS)
+    if (src && !src.startsWith("data:") && !src.startsWith("blob:")) {
+      const isExternal = (() => { try { return new URL(src, window.location.origin).origin !== window.location.origin; } catch { return false; } })();
+      if (isExternal) return tryLoad(proxiedSrc).catch(() => tryLoad(src));
+    }
     return tryLoad(src).catch(() => proxiedSrc !== src ? tryLoad(proxiedSrc) : Promise.reject(new Error("Image load failed")));
   }, [getImageProxyUrl]);
 
@@ -420,8 +425,8 @@ const PhotoCard = () => {
     // (when custom frame is uploaded and no separate bg image)
     const fetchedAsLayer = !uploadedBgImage && fetchedImage && uploadedFrameImage;
 
-    // Background
-    const bgSrc = fetchedAsLayer ? null : (uploadedBgImage || fetchedImage);
+    // Background - always show fetched image as background when no custom bg
+    const bgSrc = uploadedBgImage || fetchedImage;
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
@@ -1166,8 +1171,34 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 </div>
                 {showQr && <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="h-8 text-xs" />}
 
-                {/* Text position hint */}
-                <p className="text-[10px] text-muted-foreground">👆 প্রিভিউতে টাচ/ড্র্যাগ করে শিরোনাম ও কোটেশন সরান</p>
+                {/* Manual position controls for title & quote */}
+                <div className="space-y-1.5 bg-muted/50 rounded p-2">
+                  <span className="text-[11px] font-medium">📍 টেক্সট পজিশন কন্ট্রোল</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম X: {titleOffsetX}%</label>
+                      <Slider value={[titleOffsetX]} onValueChange={([v]) => setTitleOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম Y: {titleOffsetY}%</label>
+                      <Slider value={[titleOffsetY]} onValueChange={([v]) => setTitleOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
+                    </div>
+                    {customQuote && (
+                      <>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন X: {quoteOffsetX}%</label>
+                          <Slider value={[quoteOffsetX]} onValueChange={([v]) => setQuoteOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন Y: {quoteOffsetY}%</label>
+                          <Slider value={[quoteOffsetY]} onValueChange={([v]) => setQuoteOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground">👆 প্রিভিউতে টাচ/ড্র্যাগ করে অথবা উপরের স্লাইডার দিয়ে পজিশন ঠিক করুন</p>
 
                 <Button onClick={generateCard} className="w-full h-10">
                   <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
@@ -1205,8 +1236,22 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       className="relative touch-none select-none cursor-grab active:cursor-grabbing"
                     >
                       <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
-                        👆 ড্র্যাগ করে {dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরান
+                      {/* Selection indicators */}
+                      {dragTarget && (
+                        <div className="absolute inset-0 pointer-events-none">
+                          <div className={`absolute w-5 h-5 rounded-full border-2 border-dashed animate-pulse ${
+                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : "border-yellow-400 bg-yellow-400/30"
+                          }`} style={{
+                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : titleOffsetX)}%`,
+                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : titleOffsetY)}%`,
+                            transform: "translate(-50%, -50%)",
+                          }} />
+                        </div>
+                      )}
+                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[10px] px-2.5 py-1 rounded-full transition-colors ${
+                        dragTarget ? (dragTarget === "person" ? "bg-blue-600/80" : dragTarget === "quote" ? "bg-green-600/80" : "bg-yellow-600/80") : "bg-black/60"
+                      }`}>
+                        {dragTarget ? `✋ ${dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরাচ্ছেন` : "👆 ট্যাপ করে ড্র্যাগ করুন"}
                       </div>
                     </div>
                     <div className="flex gap-1.5 flex-wrap">
