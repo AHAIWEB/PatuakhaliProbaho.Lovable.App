@@ -14,6 +14,7 @@ import {
   usePostsByDivision,
   useNationalPosts,
   useMostViewedPosts,
+  useHighlightedPosts,
   usePostsRealtime,
 } from "@/hooks/usePosts";
 import { useQuery } from "@tanstack/react-query";
