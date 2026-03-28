@@ -70,7 +70,9 @@ const PhotoCard = () => {
   const [showQr, setShowQr] = useState(false);
   const [titleFontSize, setTitleFontSize] = useState(52);
   const [quoteFontSize, setQuoteFontSize] = useState(36);
-  const [activeFrame, setActiveFrame] = useState("none");
+  const [logoSize, setLogoSize] = useState(50);
+  const [logoOffsetX, setLogoOffsetX] = useState(85);
+  const [logoOffsetY, setLogoOffsetY] = useState(5);
   const [frameColor1, setFrameColor1] = useState("#e74c3c");
   const [frameColor2, setFrameColor2] = useState("#f39c12");
 
@@ -495,12 +497,14 @@ const PhotoCard = () => {
       case "bold": drawBoldTemplate(ctx, W, H); break;
     }
 
-    // Logo
+    // Logo with size/position controls
     if (uploadedLogo) {
       try {
         const logoImg = await loadImage(uploadedLogo);
-        const logoSize = 120;
-        ctx.drawImage(logoImg, W - logoSize - 30, 20, logoSize, logoSize);
+        const lSize = Math.round(W * (logoSize / 100));
+        const lx = Math.round((W - lSize) * (logoOffsetX / 100));
+        const ly = Math.round((H - lSize) * (logoOffsetY / 100));
+        ctx.drawImage(logoImg, lx, ly, lSize, lSize);
       } catch { /* fallback */ }
     }
 
@@ -1015,6 +1019,27 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                   )}
                 </div>
 
+                {/* Logo size/position controls */}
+                {uploadedLogo && (
+                  <div className="space-y-1.5 bg-muted/50 rounded p-2">
+                    <span className="text-[11px] font-medium">লোগো কন্ট্রোল</span>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">X পজিশন</label>
+                        <Slider value={[logoOffsetX]} onValueChange={([v]) => setLogoOffsetX(v)} min={0} max={100} step={1} className="mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Y পজিশন</label>
+                        <Slider value={[logoOffsetY]} onValueChange={([v]) => setLogoOffsetY(v)} min={0} max={100} step={1} className="mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">সাইজ</label>
+                        <Slider value={[logoSize]} onValueChange={([v]) => setLogoSize(v)} min={5} max={50} step={1} className="mt-1" />
+                      </div>
+                    </div>
+                  </div>
+                )
+
                 {/* Image layer toggle */}
                 {(uploadedPersonImage || uploadedFrameImage || (fetchedImage && uploadedFrameImage)) && (
                   <div className="flex items-center gap-2 bg-muted/50 rounded p-2">
@@ -1087,7 +1112,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
               <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">✍️ টেক্সট কাস্টমাইজ</CardTitle></CardHeader>
               <CardContent className="p-3 pt-1 space-y-2">
                 <Input placeholder="শিরোনাম" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} className="h-9 text-sm" />
-                <Textarea placeholder="কোটেশন / বিস্তারিত (ঐচ্ছিক)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={2} className="text-sm" />
+                <Textarea placeholder="কোটেশন / বিস্তারিত (৮-১০ লাইন লিখুন)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={6} className="text-sm" />
                 <div className="grid grid-cols-2 gap-1.5">
                   <Input placeholder="ব্যক্তির নাম" value={quotePerson} onChange={(e) => setQuotePerson(e.target.value)} className="h-8 text-xs" />
                   <Input placeholder="পদবী" value={quoteDesignation} onChange={(e) => setQuoteDesignation(e.target.value)} className="h-8 text-xs" />
