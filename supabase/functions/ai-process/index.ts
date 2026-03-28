@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
         try {
           const aiResult = await callAI(
             LOVABLE_API_KEY,
-            `তুমি একজন বাংলা নিউজ এডিটর। নিচের টেক্সট থেকে সর্বোচ্চ ৩টি গুরুত্বপূর্ণ কোটেশন বের করো। শুধু JSON ফরম্যাটে উত্তর দাও: {"quotes": ["...", "..."]}`,
+            `তুমি একজন বাংলা নিউজ এডিটর। নিচের টেক্সট থেকে সর্বোচ্চ ৫টি কোটেশন বের করো। প্রতিটি কোটেশন কমপক্ষে ৮-১০ লাইন (২০০-৫০০ অক্ষর) দীর্ঘ হবে এবং সংবাদের মূল বিষয়বস্তু, বিশ্লেষণ, এবং প্রেক্ষাপট অন্তর্ভুক্ত করবে। শুধু JSON ফরম্যাটে উত্তর দাও: {"quotes": ["...", "..."]}`,
             text
           );
           const parsed = JSON.parse(aiResult);
@@ -36,12 +36,18 @@ Deno.serve(async (req) => {
           .split(/[।\.\!\?\n]+/)
           .map((s: string) => s.trim())
           .filter((s: string) => s.length > 5);
-        if (sentences.length > 0) {
-          for (let i = 0; i < Math.min(3, sentences.length); i++) {
-            quotes.push(`"${sentences[i]}"`);
+        if (sentences.length >= 4) {
+          // Combine sentences for longer quotes (8-10 lines)
+          quotes.push(`"${sentences.slice(0, Math.min(8, sentences.length)).join("। ")}।"`);
+          if (sentences.length >= 6) {
+            quotes.push(`"${sentences.slice(0, Math.min(5, sentences.length)).join("। ")}।"`);
           }
-        } else {
-          quotes.push(`"${input.substring(0, 100)}"`);
+        }
+        for (let i = 0; i < Math.min(3, sentences.length); i++) {
+          quotes.push(`"${sentences[i]}"`);
+        }
+        if (quotes.length === 0) {
+          quotes.push(`"${input.substring(0, 500)}"`);
         }
       }
       return jsonResponse({ quotes });

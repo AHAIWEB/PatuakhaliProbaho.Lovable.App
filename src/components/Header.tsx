@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { LogIn, User, Shield, LogOut } from "lucide-react";
@@ -8,14 +9,29 @@ import { useSiteSetting } from "@/hooks/useSiteSettings";
 const Header = () => {
   const { user, userRole, loading, signOut } = useAuth();
   const { data: customLogo } = useSiteSetting("site_logo");
+  const { data: siteNameSetting } = useSiteSetting("site_name");
+  const { data: logoSizeSetting } = useSiteSetting("header_logo_size");
+  const { data: faviconUrl } = useSiteSetting("site_favicon");
   const logo = customLogo || defaultLogo;
+  const logoHeight = parseInt(logoSizeSetting || "64") || 64;
+  const siteName = siteNameSetting || "Patuakhali Probaho";
+
+  // Dynamic favicon
+  useEffect(() => {
+    if (faviconUrl) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+      link.href = faviconUrl;
+    }
+  }, [faviconUrl]);
+
   return (
     <header className="bg-card border-b border-border py-2 sm:py-4">
       <div className="container mx-auto px-3 sm:px-4 flex items-center justify-between">
         <div className="w-16 sm:w-32" />
         <a href="/" className="flex flex-col items-center gap-0.5">
-          <img src={logo} alt="পটুয়াখালী প্রবাহ" width={180} height={90} className="h-10 sm:h-16 w-auto" />
-          <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Patuakhali Probaho</span>
+          <img src={logo} alt={siteName} width={logoHeight * 2} height={logoHeight} style={{ height: `${Math.min(logoHeight, 48)}px` }} className="w-auto sm:h-auto" />
+          <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">{siteName}</span>
         </a>
         <div className="flex items-center gap-1 sm:gap-2 w-16 sm:w-32 justify-end">
           {loading ? null : user ? (
