@@ -297,6 +297,11 @@ const PhotoCard = () => {
         img.src = imageSrc;
       });
     const proxiedSrc = getImageProxyUrl(src);
+    // For external images, try proxy first (more reliable for CORS)
+    if (src && !src.startsWith("data:") && !src.startsWith("blob:")) {
+      const isExternal = (() => { try { return new URL(src, window.location.origin).origin !== window.location.origin; } catch { return false; } })();
+      if (isExternal) return tryLoad(proxiedSrc).catch(() => tryLoad(src));
+    }
     return tryLoad(src).catch(() => proxiedSrc !== src ? tryLoad(proxiedSrc) : Promise.reject(new Error("Image load failed")));
   }, [getImageProxyUrl]);
 
@@ -420,8 +425,8 @@ const PhotoCard = () => {
     // (when custom frame is uploaded and no separate bg image)
     const fetchedAsLayer = !uploadedBgImage && fetchedImage && uploadedFrameImage;
 
-    // Background
-    const bgSrc = fetchedAsLayer ? null : (uploadedBgImage || fetchedImage);
+    // Background - always show fetched image as background when no custom bg
+    const bgSrc = uploadedBgImage || fetchedImage;
     if (bgSrc) {
       try {
         const bgImg = await loadImage(bgSrc);
@@ -1205,8 +1210,22 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       className="relative touch-none select-none cursor-grab active:cursor-grabbing"
                     >
                       <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
-                        👆 ড্র্যাগ করে {dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরান
+                      {/* Selection indicators */}
+                      {dragTarget && (
+                        <div className="absolute inset-0 pointer-events-none">
+                          <div className={`absolute w-5 h-5 rounded-full border-2 border-dashed animate-pulse ${
+                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : "border-yellow-400 bg-yellow-400/30"
+                          }`} style={{
+                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : titleOffsetX)}%`,
+                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : titleOffsetY)}%`,
+                            transform: "translate(-50%, -50%)",
+                          }} />
+                        </div>
+                      )}
+                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[10px] px-2.5 py-1 rounded-full transition-colors ${
+                        dragTarget ? (dragTarget === "person" ? "bg-blue-600/80" : dragTarget === "quote" ? "bg-green-600/80" : "bg-yellow-600/80") : "bg-black/60"
+                      }`}>
+                        {dragTarget ? `✋ ${dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরাচ্ছেন` : "👆 ট্যাপ করে ড্র্যাগ করুন"}
                       </div>
                     </div>
                     <div className="flex gap-1.5 flex-wrap">
