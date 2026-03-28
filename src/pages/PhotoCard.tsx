@@ -1038,7 +1038,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       </div>
                     </div>
                   </div>
-                )
+                )}
 
                 {/* Image layer toggle */}
                 {(uploadedPersonImage || uploadedFrameImage || (fetchedImage && uploadedFrameImage)) && (
