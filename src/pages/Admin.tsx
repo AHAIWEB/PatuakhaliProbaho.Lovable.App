@@ -350,6 +350,22 @@ const Admin = () => {
     }
   };
 
+  // Share to Social Media (Telegram + Facebook)
+  const shareToSocial = async (post: Post, platforms: string[]) => {
+    const url = post.source_url || `${window.location.origin}/post/${post.slug}`;
+    try {
+      const { data, error } = await supabase.functions.invoke("social-post", {
+        body: { title: post.title, url, image_url: post.image_url, platforms },
+      });
+      if (error) throw error;
+      const results = data?.results || {};
+      const msgs = Object.entries(results).map(([p, r]: [string, any]) => `${p}: ${r.success ? "✅" : "❌ " + r.error}`);
+      toast({ title: "সোশাল শেয়ার", description: msgs.join("\n") });
+    } catch (e: any) {
+      toast({ title: "শেয়ার ব্যর্থ", description: e.message, variant: "destructive" });
+    }
+  };
+
   // Go to PhotoCard with post data
   const goToPhotoCard = (post: Post) => {
     const params = new URLSearchParams({
