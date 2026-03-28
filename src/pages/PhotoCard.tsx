@@ -73,6 +73,7 @@ const PhotoCard = () => {
   const [logoSize, setLogoSize] = useState(50);
   const [logoOffsetX, setLogoOffsetX] = useState(85);
   const [logoOffsetY, setLogoOffsetY] = useState(5);
+  const [activeFrame, setActiveFrame] = useState("none");
   const [frameColor1, setFrameColor1] = useState("#e74c3c");
   const [frameColor2, setFrameColor2] = useState("#f39c12");
 
