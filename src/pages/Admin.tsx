@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
 import { cleanText } from "@/lib/content";
@@ -1007,6 +1008,36 @@ const LayoutSettingsTab = () => {
   const { data: settings, isLoading } = useLayoutSettings();
   const updateSetting = useUpdateLayoutSetting();
   const { toast } = useToast();
+  const [newKey, setNewKey] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+
+  const addSection = async () => {
+    if (!newKey || !newLabel) return;
+    const maxSort = (settings ?? []).reduce((m, s) => Math.max(m, s.sort_order || 0), 0);
+    const { error } = await supabase.from("layout_settings").insert({
+      section_key: newKey, section_label: newLabel, post_count: 5, is_visible: true, sort_order: maxSort + 1,
+    });
+    if (error) { toast({ title: "ত্রুটি", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "সেকশন যুক্ত হয়েছে" });
+    setNewKey(""); setNewLabel("");
+    updateSetting.mutate({ id: "refresh" } as any); // trigger refresh
+  };
+
+  const deleteSection = async (id: string) => {
+    if (!confirm("এই সেকশন মুছে ফেলতে চান?")) return;
+    await supabase.from("layout_settings").delete().eq("id", id);
+    toast({ title: "সেকশন মুছে ফেলা হয়েছে" });
+    updateSetting.mutate({ id: "refresh" } as any);
+  };
+
+  const saveLabel = async (id: string) => {
+    const { error } = await supabase.from("layout_settings").update({ section_label: editLabel }).eq("id", id);
+    if (!error) toast({ title: "লেবেল আপডেট হয়েছে" });
+    setEditingId(null);
+    updateSetting.mutate({ id: "refresh" } as any);
+  };
 
   if (isLoading) return <div className="p-4 text-center text-sm text-muted-foreground">লোড হচ্ছে...</div>;
 
@@ -1016,9 +1047,16 @@ const LayoutSettingsTab = () => {
         <CardTitle className="text-sm sm:text-base flex items-center gap-2">
           <Settings2 className="w-4 h-4" /> হোমপেজ লেআউট সেটিংস
         </CardTitle>
-        <p className="text-xs text-muted-foreground">প্রতিটি সেকশনে কতটি পোস্ট দেখাবে তা নিয়ন্ত্রণ করুন</p>
+        <p className="text-xs text-muted-foreground">সেকশন যুক্ত/এডিট/মুছুন এবং পোস্ট সংখ্যা নিয়ন্ত্রণ করুন</p>
       </CardHeader>
-      <CardContent className="p-3 sm:p-6 pt-0 space-y-2">
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-3">
+        {/* Add new section */}
+        <div className="flex gap-1.5 flex-wrap border-b pb-3 border-border">
+          <Input placeholder="সেকশন key (e.g. sports)" value={newKey} onChange={(e) => setNewKey(e.target.value)} className="flex-1 min-w-[100px] h-8 text-xs" />
+          <Input placeholder="লেবেল (যেমন: খেলাধুলা)" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} className="flex-1 min-w-[100px] h-8 text-xs" />
+          <Button onClick={addSection} size="sm" className="h-8 text-xs"><Plus className="w-3 h-3 mr-1" />যুক্ত</Button>
+        </div>
+
         {(settings ?? []).map((s) => (
           <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
             <button
@@ -1030,23 +1068,35 @@ const LayoutSettingsTab = () => {
             >
               {s.is_visible ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
             </button>
-            <span className={`text-xs sm:text-sm flex-1 font-medium ${!s.is_visible ? "opacity-50" : ""}`}>
-              {s.section_label}
-            </span>
+            {editingId === s.id ? (
+              <div className="flex-1 flex gap-1">
+                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="h-7 text-xs flex-1" />
+                <Button size="sm" className="h-7 text-xs" onClick={() => saveLabel(s.id)}><Save className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingId(null)}><X className="w-3 h-3" /></Button>
+              </div>
+            ) : (
+              <span className={`text-xs sm:text-sm flex-1 font-medium ${!s.is_visible ? "opacity-50" : ""}`}
+                onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }}
+                title="ক্লিক করে এডিট করুন">
+                {s.section_label} <span className="text-[9px] text-muted-foreground">({s.section_key})</span>
+              </span>
+            )}
             <div className="flex items-center gap-1">
               <Button size="icon" variant="outline" className="h-7 w-7"
                 disabled={s.post_count <= 1}
-                onClick={() => {
-                  updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) });
-                }}>
+                onClick={() => updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) })}>
                 <Minus className="w-3 h-3" />
               </Button>
               <span className="w-7 text-center text-sm font-bold">{s.post_count}</span>
               <Button size="icon" variant="outline" className="h-7 w-7"
-                onClick={() => {
-                  updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 });
-                }}>
+                onClick={() => updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 })}>
                 <Plus className="w-3 h-3" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }}>
+                <Edit className="w-3 h-3" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteSection(s.id)}>
+                <Trash2 className="w-3 h-3" />
               </Button>
             </div>
           </div>
@@ -1057,39 +1107,95 @@ const LayoutSettingsTab = () => {
 };
 
 const SiteSettingsTab = () => {
-  const { data: logoUrl, isLoading } = useSiteSetting("site_logo");
+  const { data: logoUrl, isLoading: logoLoading } = useSiteSetting("site_logo");
+  const { data: siteName } = useSiteSetting("site_name");
+  const { data: faviconUrl } = useSiteSetting("site_favicon");
+  const { data: logoSize } = useSiteSetting("header_logo_size");
+  const { data: socialLinksRaw } = useSiteSetting("social_links");
   const updateSetting = useUpdateSiteSetting();
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  const [localSiteName, setLocalSiteName] = useState("");
+  const [localLogoSize, setLocalLogoSize] = useState("64");
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Social links state
+  const [socialLinks, setSocialLinks] = useState<{ platform: string; url: string }[]>([]);
+  const [newPlatform, setNewPlatform] = useState("facebook");
+  const [newSocialUrl, setNewSocialUrl] = useState("");
+
+  useEffect(() => {
+    if (siteName) setLocalSiteName(siteName);
+  }, [siteName]);
+
+  useEffect(() => {
+    if (logoSize) setLocalLogoSize(logoSize);
+  }, [logoSize]);
+
+  useEffect(() => {
+    if (socialLinksRaw) {
+      try { setSocialLinks(JSON.parse(socialLinksRaw)); } catch { setSocialLinks([]); }
+    }
+  }, [socialLinksRaw]);
+
+  const handleFileUploadToStorage = async (file: File, path: string, settingKey: string) => {
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `logo/site-logo.${ext}`;
-      
-      // Remove old logo if exists
       await supabase.storage.from("site-assets").remove([path]);
-      
-      const { error: uploadError } = await supabase.storage
-        .from("site-assets")
-        .upload(path, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage.from("site-assets").upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("site-assets")
-        .getPublicUrl(path);
-
-      await updateSetting.mutateAsync({ key: "site_logo", value: urlData.publicUrl });
-      toast({ title: "লোগো আপলোড সফল!" });
+      const { data: urlData } = supabase.storage.from("site-assets").getPublicUrl(path);
+      await updateSetting.mutateAsync({ key: settingKey, value: urlData.publicUrl });
+      toast({ title: "আপলোড সফল!" });
     } catch (err: any) {
       toast({ title: "আপলোড ব্যর্থ", description: err.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
+    } finally { setUploading(false); }
   };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUploadToStorage(file, `logo/site-logo.${file.name.split(".").pop()}`, "site_logo");
+  };
+
+  const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUploadToStorage(file, `favicon/favicon.${file.name.split(".").pop()}`, "site_favicon");
+  };
+
+  const saveSiteName = async () => {
+    await updateSetting.mutateAsync({ key: "site_name", value: localSiteName });
+    toast({ title: "সাইটের নাম আপডেট হয়েছে" });
+  };
+
+  const saveLogoSize = async () => {
+    await updateSetting.mutateAsync({ key: "header_logo_size", value: localLogoSize });
+    toast({ title: "লোগো সাইজ আপডেট হয়েছে" });
+  };
+
+  const addSocialLink = async () => {
+    if (!newSocialUrl) return;
+    const updated = [...socialLinks, { platform: newPlatform, url: newSocialUrl }];
+    await updateSetting.mutateAsync({ key: "social_links", value: JSON.stringify(updated) });
+    setSocialLinks(updated);
+    setNewSocialUrl("");
+    toast({ title: "সোশাল লিংক যুক্ত হয়েছে" });
+  };
+
+  const removeSocialLink = async (idx: number) => {
+    const updated = socialLinks.filter((_, i) => i !== idx);
+    await updateSetting.mutateAsync({ key: "social_links", value: JSON.stringify(updated) });
+    setSocialLinks(updated);
+    toast({ title: "সোশাল লিংক মুছে ফেলা হয়েছে" });
+  };
+
+  const platformOptions = [
+    { value: "facebook", label: "Facebook" },
+    { value: "youtube", label: "YouTube" },
+    { value: "twitter", label: "Twitter/X" },
+    { value: "telegram", label: "Telegram" },
+    { value: "instagram", label: "Instagram" },
+    { value: "tiktok", label: "TikTok" },
+    { value: "whatsapp", label: "WhatsApp" },
+  ];
 
   return (
     <Card>
@@ -1098,25 +1204,80 @@ const SiteSettingsTab = () => {
           <Image className="w-4 h-4" /> সাইট সেটিংস
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-5">
+        {/* Site Name */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">সাইটের নাম</p>
+          <div className="flex gap-2">
+            <Input placeholder="সাইটের নাম" value={localSiteName} onChange={(e) => setLocalSiteName(e.target.value)} className="flex-1 h-8 text-sm" />
+            <Button onClick={saveSiteName} size="sm" className="h-8"><Save className="w-3 h-3 mr-1" />সেভ</Button>
+          </div>
+        </div>
+
+        {/* Logo */}
         <div className="space-y-2">
           <p className="text-sm font-medium">সাইট লোগো</p>
-          {isLoading ? (
+          {logoLoading ? (
             <div className="w-32 h-16 bg-muted animate-pulse rounded" />
           ) : logoUrl ? (
             <img src={logoUrl} alt="সাইট লোগো" className="h-16 w-auto rounded border border-border p-1" />
           ) : (
-            <p className="text-xs text-muted-foreground">কোনো লোগো আপলোড করা হয়নি (ডিফল্ট ব্যবহার হচ্ছে)</p>
+            <p className="text-xs text-muted-foreground">ডিফল্ট লোগো ব্যবহার হচ্ছে</p>
           )}
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
             <Button variant="outline" size="sm" disabled={uploading} asChild>
-              <span>
-                <Upload className="w-3.5 h-3.5 mr-1" />
-                {uploading ? "আপলোড হচ্ছে..." : "লোগো আপলোড"}
-              </span>
+              <span><Upload className="w-3.5 h-3.5 mr-1" />{uploading ? "আপলোড হচ্ছে..." : "লোগো আপলোড"}</span>
             </Button>
           </label>
+        </div>
+
+        {/* Logo Size */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">হেডার লোগো সাইজ: {localLogoSize}px</p>
+          <div className="flex items-center gap-2">
+            <Slider value={[parseInt(localLogoSize) || 64]} onValueChange={([v]) => setLocalLogoSize(String(v))} min={24} max={120} step={4} className="flex-1" />
+            <Button onClick={saveLogoSize} size="sm" className="h-7 text-xs"><Save className="w-3 h-3" /></Button>
+          </div>
+        </div>
+
+        {/* Favicon */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">ফেভিকন</p>
+          {faviconUrl ? (
+            <img src={faviconUrl} alt="ফেভিকন" className="h-8 w-8 rounded border border-border" />
+          ) : (
+            <p className="text-xs text-muted-foreground">ডিফল্ট ফেভিকন ব্যবহার হচ্ছে</p>
+          )}
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input type="file" accept="image/*" onChange={handleFaviconUpload} className="hidden" />
+            <Button variant="outline" size="sm" disabled={uploading} asChild>
+              <span><Upload className="w-3.5 h-3.5 mr-1" />ফেভিকন আপলোড</span>
+            </Button>
+          </label>
+        </div>
+
+        {/* Social Links */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">সোশাল মিডিয়া লিংক</p>
+          <div className="space-y-1.5">
+            {socialLinks.map((link, idx) => (
+              <div key={idx} className="flex items-center gap-2 p-2 rounded border bg-muted/30">
+                <span className="text-xs font-medium capitalize w-20">{link.platform}</span>
+                <span className="text-xs text-muted-foreground flex-1 truncate">{link.url}</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeSocialLink(idx)}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            <select className="border rounded-md p-1.5 bg-background text-xs h-8" value={newPlatform} onChange={(e) => setNewPlatform(e.target.value)}>
+              {platformOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <Input placeholder="https://..." value={newSocialUrl} onChange={(e) => setNewSocialUrl(e.target.value)} className="flex-1 min-w-[120px] h-8 text-xs" />
+            <Button onClick={addSocialLink} size="sm" className="h-8 text-xs"><Plus className="w-3 h-3 mr-1" />যুক্ত</Button>
+          </div>
         </div>
       </CardContent>
     </Card>
