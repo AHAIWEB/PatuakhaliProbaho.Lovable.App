@@ -632,6 +632,9 @@ const Admin = () => {
                         <Button size="icon" variant="ghost" onClick={() => sharePost(post)} className="h-6 w-6">
                           <Share2 className="h-3 w-3" />
                         </Button>
+                        <Button size="icon" variant="ghost" onClick={() => shareToSocial(post, ["telegram", "facebook"])} className="h-6 w-6" title="সোশাল শেয়ার">
+                          <Send className="h-3 w-3" />
+                        </Button>
                         {userRole === "admin" && (
                           <Button size="icon" variant="ghost" onClick={() => deletePost(post.id)} className="h-6 w-6 text-destructive">
                             <Trash2 className="h-3 w-3" />
