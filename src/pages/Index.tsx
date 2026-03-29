@@ -142,7 +142,7 @@ const MasonryCard = ({ news, size = "normal", index = 0 }: { news: Post; size?: 
           <Link to={postLink} className={`font-bold leading-snug text-foreground hover:text-accent transition-colors block mb-1.5 line-clamp-2 ${size === "large" ? "text-base sm:text-lg" : size === "wide" ? "text-sm sm:text-base" : "text-sm"}`}>
             {cleanText(news.title)}
           </Link>
-          {excerpt && size !== "small" && (
+          {excerpt && (
             <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2 leading-relaxed">{excerpt}…</p>
           )}
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
