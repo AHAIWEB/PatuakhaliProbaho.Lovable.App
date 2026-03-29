@@ -77,21 +77,30 @@ const useCategoryPosts = (slug: string, limit = 4) =>
     },
   });
 
-/* Pinterest-style masonry card with variable heights */
-const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "normal" | "small" }) => {
+/* Pinterest-style masonry card with variable heights and animations */
+const MasonryCard = ({ news, size = "normal", index = 0 }: { news: Post; size?: "large" | "normal" | "small" | "wide"; index?: number }) => {
   const postLink = `/post/${news.slug}`;
-  const excerpt = cleanText(news.content || news.excerpt || "").substring(0, size === "large" ? 200 : 80);
+  const excerpt = cleanText(news.content || news.excerpt || "").substring(0, size === "large" ? 200 : size === "wide" ? 150 : 80);
+
+  // Vary image aspect ratios for visual interest
+  const imageAspect = size === "large" ? "aspect-[3/4]" : size === "wide" ? "aspect-[16/9]" : index % 3 === 0 ? "aspect-[4/3]" : index % 3 === 1 ? "aspect-square" : "aspect-[16/10]";
 
   if (size === "small") {
     return (
-      <div className="masonry-card group break-inside-avoid mb-3">
-        <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-          <div className="p-3">
-            <Link to={postLink} className="text-sm font-bold leading-snug text-foreground hover:text-accent transition-colors line-clamp-2 block">
+      <div className="masonry-card group break-inside-avoid mb-3 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+        <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+          {news.image_url && (
+            <Link to={postLink} className="block overflow-hidden">
+              <img src={news.image_url} alt={news.title} className="w-full aspect-[2/1] object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+            </Link>
+          )}
+          <div className="p-2.5">
+            <Link to={postLink} className="text-xs font-bold leading-snug text-foreground hover:text-accent transition-colors line-clamp-2 block">
               {cleanText(news.title)}
             </Link>
             <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
               <span>{news.source_name || "নিজস্ব"}</span>
+              {news.published_at && <span>• {new Date(news.published_at).toLocaleDateString("bn-BD")}</span>}
             </div>
           </div>
         </div>
@@ -100,16 +109,18 @@ const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "
   }
 
   return (
-    <div className="masonry-card group break-inside-avoid mb-3">
-      <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+    <div className="masonry-card group break-inside-avoid mb-3 animate-fade-in" style={{ animationDelay: `${index * 60}ms` }}>
+      <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative">
         {news.image_url && (
-          <Link to={postLink} className="block overflow-hidden">
+          <Link to={postLink} className="block overflow-hidden relative">
             <img
               src={news.image_url}
               alt={news.title}
-              className={`w-full object-cover transition-transform duration-500 group-hover:scale-105 ${size === "large" ? "aspect-[4/3]" : "aspect-[16/10]"}`}
+              className={`w-full object-cover transition-transform duration-700 group-hover:scale-110 ${imageAspect}`}
               loading="lazy"
             />
+            {/* Gradient overlay on image */}
+            <div className="absolute inset-0 bg-gradient-to-t from-foreground/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Link>
         )}
         {news.is_highlighted && (
@@ -117,25 +128,35 @@ const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "
             📌
           </span>
         )}
-        <div className="p-2.5">
+        {news.is_featured && (
+          <span className="absolute top-2 right-2 bg-accent text-accent-foreground text-[9px] font-bold px-1.5 py-0.5 rounded z-10">
+            ⭐
+          </span>
+        )}
+        <div className={`p-2.5 ${size === "large" ? "p-3" : ""}`}>
           {news.source_category && (
-            <span className="text-[9px] font-medium bg-accent/10 text-accent px-1.5 py-0.5 rounded mb-1 inline-block">
+            <span className="text-[9px] font-semibold bg-accent/10 text-accent px-1.5 py-0.5 rounded mb-1.5 inline-block uppercase tracking-wide">
               {news.source_category}
             </span>
           )}
-          <Link to={postLink} className={`font-bold leading-snug text-foreground hover:text-accent transition-colors block mb-1 line-clamp-2 ${size === "large" ? "text-base" : "text-sm"}`}>
+          <Link to={postLink} className={`font-bold leading-snug text-foreground hover:text-accent transition-colors block mb-1.5 line-clamp-2 ${size === "large" ? "text-base sm:text-lg" : size === "wide" ? "text-sm sm:text-base" : "text-sm"}`}>
             {cleanText(news.title)}
           </Link>
-          {excerpt && (
-            <p className="text-[11px] text-muted-foreground line-clamp-2 mb-1.5">{excerpt}…</p>
+          {excerpt && size !== "small" && (
+            <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2 leading-relaxed">{excerpt}…</p>
           )}
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            {news.source_url ? (
-              <a href={news.source_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">
-                {news.source_name || "সোর্স"} <ExternalLink className="h-2 w-2" />
-              </a>
-            ) : (
-              <span>{news.source_name || "নিজস্ব"}</span>
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1">
+              {news.source_url ? (
+                <a href={news.source_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5 font-medium">
+                  {news.source_name || "সোর্স"} <ExternalLink className="h-2 w-2" />
+                </a>
+              ) : (
+                <span>{news.source_name || "নিজস্ব"}</span>
+              )}
+            </div>
+            {news.published_at && (
+              <span className="text-[9px]">{new Date(news.published_at).toLocaleDateString("bn-BD")}</span>
             )}
           </div>
         </div>
@@ -144,13 +165,14 @@ const MasonryCard = ({ news, size = "normal" }: { news: Post; size?: "large" | "
   );
 };
 
-/* Masonry column renderer */
+/* Masonry column renderer with varied sizes */
 const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }) => {
   return (
-    <div className={`gap-3`} style={{ columnCount: columns }}>
-      {posts.map((news, i) => (
-        <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : (i > 3 ? "small" : "normal")} />
-      ))}
+    <div className="gap-3" style={{ columnCount: columns }}>
+      {posts.map((news, i) => {
+        const size = i === 0 ? "large" : i === 1 ? "wide" : i > 4 ? "small" : "normal";
+        return <MasonryCard key={news.id} news={news} size={size} index={i} />;
+      })}
     </div>
   );
 };
