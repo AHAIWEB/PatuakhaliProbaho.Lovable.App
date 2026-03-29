@@ -450,8 +450,7 @@ const Admin = () => {
   const parentCats = categories.filter(c => !c.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const getSubCats = (pid: string) => categories.filter(c => c.parent_id === pid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  // Mobile floating action state
-  const [showMobileActions, setShowMobileActions] = useState(false);
+
 
   return (
     <div className="min-h-screen bg-muted/30 pb-16 sm:pb-0">
