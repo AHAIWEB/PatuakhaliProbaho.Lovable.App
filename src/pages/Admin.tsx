@@ -635,53 +635,62 @@ const Admin = () => {
                 </div>
               </CardHeader>
               <CardContent className="p-2 sm:p-6 pt-0 overflow-x-auto">
-                {/* Mobile card view */}
+                {/* Mobile card view - improved */}
                 <div className="sm:hidden space-y-2">
                   {pagedPosts.map((post) => (
-                    <div key={post.id} className="border rounded-lg p-2.5 bg-card space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-medium leading-tight flex-1">{cleanText(post.title)}</p>
-                        {post.rss_feed_id ? <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">RSS</span>
-                          : post.author_id ? <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex-shrink-0">ম্যানুয়াল</span>
-                          : post.source_name ? <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0">স্ক্র্যাপ</span>
-                          : null}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <span>{post.source_name || "নিজস্ব"}</span>
-                        <span>•</span>
-                        <span>{post.published_at ? new Date(post.published_at).toLocaleDateString("bn-BD") : ""}</span>
-                      </div>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <select className="text-[10px] border rounded p-0.5 bg-background w-20" value={post.category_id || ""} onChange={(e) => quickAssignCategory(post.id, e.target.value)}>
-                          <option value="">ক্যাটাগরি</option>
+                    <div key={post.id} className="border rounded-lg bg-card overflow-hidden animate-fade-in">
+                      <div className="p-2.5 space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          {post.image_url && (
+                            <img src={post.image_url} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium leading-tight line-clamp-2">{cleanText(post.title)}</p>
+                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                              {post.rss_feed_id ? <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded">RSS</span>
+                                : post.author_id ? <span className="bg-accent/10 text-accent px-1.5 py-0.5 rounded">ম্যানুয়াল</span>
+                                : post.source_name ? <span className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded">স্ক্র্যাপ</span>
+                                : null}
+                              <span>{post.source_name || "নিজস্ব"}</span>
+                              <span>•</span>
+                              <span>{post.published_at ? new Date(post.published_at).toLocaleDateString("bn-BD") : ""}</span>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Quick category assign */}
+                        <select className="w-full text-[10px] border rounded p-1 bg-background" value={post.category_id || ""} onChange={(e) => quickAssignCategory(post.id, e.target.value)}>
+                          <option value="">ক্যাটাগরি নির্বাচন</option>
                           {categories.map((c) => <option key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</option>)}
                         </select>
-                        <Button size="icon" variant={post.is_featured ? "default" : "ghost"} onClick={() => toggleFeatured(post)} className="h-6 w-6">
-                          <Star className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant={post.is_highlighted ? "default" : "ghost"} onClick={() => toggleHighlighted(post)} className="h-6 w-6">
-                          <Highlighter className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => startEdit(post)} className="h-6 w-6">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => goToPhotoCard(post)} className="h-6 w-6" title="কার্ড">
-                          <Camera className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => shareToBlogger(post)} className="h-6 w-6" title="Blogger">
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => sharePost(post)} className="h-6 w-6">
-                          <Share2 className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => shareToSocial(post, ["telegram", "facebook"])} className="h-6 w-6" title="সোশাল শেয়ার">
-                          <Send className="h-3 w-3" />
-                        </Button>
-                        {userRole === "admin" && (
-                          <Button size="icon" variant="ghost" onClick={() => deletePost(post.id)} className="h-6 w-6 text-destructive">
-                            <Trash2 className="h-3 w-3" />
+                        {/* Action bar - scrollable horizontally */}
+                        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
+                          <Button size="sm" variant={post.is_featured ? "default" : "outline"} onClick={() => toggleFeatured(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Star className="h-3 w-3" />{post.is_featured ? "ফিচার্ড ✓" : "ফিচার"}
                           </Button>
-                        )}
+                          <Button size="sm" variant={post.is_highlighted ? "default" : "outline"} onClick={() => toggleHighlighted(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Highlighter className="h-3 w-3" />{post.is_highlighted ? "হাইলাইট ✓" : "হাইলাইট"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => startEdit(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Edit className="h-3 w-3" />এডিট
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => goToPhotoCard(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Camera className="h-3 w-3" />কার্ড
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => shareToSocial(post, ["telegram", "facebook"])} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Send className="h-3 w-3" />সোশাল
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => sharePost(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <Share2 className="h-3 w-3" />শেয়ার
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => shareToBlogger(post)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0">
+                            <ExternalLink className="h-3 w-3" />ব্লগার
+                          </Button>
+                          {userRole === "admin" && (
+                            <Button size="sm" variant="outline" onClick={() => deletePost(post.id)} className="h-7 text-[10px] px-2 gap-1 flex-shrink-0 text-destructive border-destructive/30">
+                              <Trash2 className="h-3 w-3" />ডিলিট
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
