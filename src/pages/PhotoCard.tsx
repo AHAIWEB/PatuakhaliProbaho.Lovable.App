@@ -42,7 +42,10 @@ const builtInFrames = [
   { id: "double", name: "ডাবল লাইন" },
   { id: "corner-accent", name: "কর্নার অ্যাক্সেন্ট" },
   { id: "film-strip", name: "ফিল্ম স্ট্রিপ" },
-  { id: "ornate", name: "অর্নেট" },
+   { id: "ornate", name: "অর্নেট" },
+   { id: "modern-geo", name: "মডার্ন জিও" },
+   { id: "neon-glow", name: "নিয়ন গ্লো" },
+   { id: "newspaper", name: "নিউজপেপার" },
 ];
 
 const PhotoCard = () => {
@@ -70,7 +73,7 @@ const PhotoCard = () => {
   const [showQr, setShowQr] = useState(false);
   const [titleFontSize, setTitleFontSize] = useState(52);
   const [quoteFontSize, setQuoteFontSize] = useState(36);
-  const [logoSize, setLogoSize] = useState(50);
+  const [logoSize, setLogoSize] = useState(80);
   const [logoOffsetX, setLogoOffsetX] = useState(85);
   const [logoOffsetY, setLogoOffsetY] = useState(5);
   const [activeFrame, setActiveFrame] = useState("none");
@@ -385,6 +388,44 @@ const PhotoCard = () => {
           ctx.beginPath(); ctx.arc(x + ocs / 2, y + ocs / 2, ocs / 3, 0, Math.PI * 2); ctx.stroke();
         });
         break;
+      case "modern-geo": {
+        // Geometric corner triangles + border
+        ctx.fillStyle = frameColor1; ctx.globalAlpha = 0.7;
+        const ts = 120;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ts, 0); ctx.lineTo(0, ts); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W - ts, 0); ctx.lineTo(W, ts); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = frameColor2;
+        ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(ts, H); ctx.lineTo(0, H - ts); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(W, H); ctx.lineTo(W - ts, H); ctx.lineTo(W, H - ts); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = grad; ctx.lineWidth = 4;
+        ctx.strokeRect(30, 30, W - 60, H - 60);
+        break;
+      }
+      case "neon-glow": {
+        // Neon glow border effect
+        for (let i = 0; i < 4; i++) {
+          ctx.strokeStyle = frameColor1;
+          ctx.lineWidth = 8 - i * 2;
+          ctx.globalAlpha = 0.3 + i * 0.15;
+          ctx.strokeRect(10 + i * 6, 10 + i * 6, W - 20 - i * 12, H - 20 - i * 12);
+        }
+        ctx.globalAlpha = 1;
+        // Corner dots
+        ctx.fillStyle = frameColor2;
+        [[25, 25], [W - 25, 25], [25, H - 25], [W - 25, H - 25]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+        });
+        break;
+      }
+      case "newspaper": {
+        // Classic newspaper style
+        ctx.fillStyle = frameColor1; ctx.fillRect(0, 0, W, 6); ctx.fillRect(0, H - 6, W, 6);
+        ctx.fillRect(0, 10, W, 2); ctx.fillRect(0, H - 12, W, 2);
+        ctx.fillRect(0, 0, 6, H); ctx.fillRect(W - 6, 0, 6, H);
+        ctx.fillRect(10, 0, 2, H); ctx.fillRect(W - 12, 0, 2, H);
+        break;
+      }
     }
     ctx.restore();
   };
@@ -467,28 +508,15 @@ const PhotoCard = () => {
       }
     };
 
-    const drawFrameLayer = () => {
+    const drawFrameLayer = async () => {
       if (uploadedFrameImage) {
-        // Draw custom frame overlay - DON'T clear bg image
         try {
-          const frameCanvas = document.createElement("canvas");
-          frameCanvas.width = W; frameCanvas.height = H;
-          const fctx = frameCanvas.getContext("2d")!;
-          const frameImg = new Image();
-          frameImg.src = uploadedFrameImage;
-          return new Promise<void>((resolve) => {
-            frameImg.onload = () => {
-              fctx.drawImage(frameImg, 0, 0, W, H);
-              ctx.drawImage(frameCanvas, 0, 0);
-              resolve();
-            };
-            frameImg.onerror = () => resolve();
-          });
+          const frameImg = await loadImage(uploadedFrameImage);
+          ctx.drawImage(frameImg, 0, 0, W, H);
         } catch { /* continue */ }
       } else if (activeFrame !== "none") {
         drawBuiltInFrame(ctx, W, H);
       }
-      return Promise.resolve();
     };
 
     if (imageInFront) {
@@ -1050,7 +1078,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       </div>
                       <div>
                         <label className="text-[10px] text-muted-foreground">সাইজ</label>
-                        <Slider value={[logoSize]} onValueChange={([v]) => setLogoSize(v)} min={5} max={50} step={1} className="mt-1" />
+                        <Slider value={[logoSize]} onValueChange={([v]) => setLogoSize(v)} min={5} max={100} step={1} className="mt-1" />
                       </div>
                     </div>
                   </div>
