@@ -449,8 +449,12 @@ const Admin = () => {
   const parentCats = categories.filter(c => !c.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const getSubCats = (pid: string) => categories.filter(c => c.parent_id === pid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
+  // Mobile floating action state
+  const [showMobileActions, setShowMobileActions] = useState(false);
+
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 pb-16 sm:pb-0">
+      {/* Sticky header */}
       <div className="bg-primary text-primary-foreground p-3 sm:p-4 sticky top-0 z-50">
         <div className="container mx-auto flex items-center justify-between gap-2">
           <h1 className="text-base sm:text-xl font-bold truncate">📋 এডমিন</h1>
@@ -465,6 +469,44 @@ const Admin = () => {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Mobile floating bottom nav */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-lg">
+        <div className="flex items-center justify-around py-1.5 px-2">
+          <button onClick={() => { const el = document.querySelector('[data-value="quick-post"]') as HTMLElement; el?.click(); }} className="flex flex-col items-center gap-0.5 text-[9px] text-muted-foreground active:text-accent">
+            <Plus className="w-4 h-4" /><span>পোস্ট</span>
+          </button>
+          <button onClick={() => { const el = document.querySelector('[data-value="posts"]') as HTMLElement; el?.click(); }} className="flex flex-col items-center gap-0.5 text-[9px] text-muted-foreground active:text-accent">
+            <Newspaper className="w-4 h-4" /><span>সকল</span>
+          </button>
+          <button onClick={() => { const el = document.querySelector('[data-value="rss"]') as HTMLElement; el?.click(); }} className="flex flex-col items-center gap-0.5 text-[9px] text-muted-foreground active:text-accent">
+            <Rss className="w-4 h-4" /><span>RSS</span>
+          </button>
+          <button onClick={() => navigate("/photo-card")} className="flex flex-col items-center gap-0.5 text-[9px] text-muted-foreground active:text-accent">
+            <Camera className="w-4 h-4" /><span>কার্ড</span>
+          </button>
+          <button onClick={() => setShowMobileActions(!showMobileActions)} className="flex flex-col items-center gap-0.5 text-[9px] text-muted-foreground active:text-accent">
+            <Settings2 className="w-4 h-4" /><span>আরও</span>
+          </button>
+        </div>
+        {/* Expanded mobile actions */}
+        {showMobileActions && (
+          <div className="bg-card border-t border-border p-2 grid grid-cols-4 gap-2 animate-fade-in">
+            <button onClick={() => { const el = document.querySelector('[data-value="scraper"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Globe className="w-4 h-4" />স্ক্র্যাপার
+            </button>
+            <button onClick={() => { const el = document.querySelector('[data-value="categories"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Tag className="w-4 h-4" />ক্যাটাগরি
+            </button>
+            <button onClick={() => { const el = document.querySelector('[data-value="layout"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Settings2 className="w-4 h-4" />লেআউট
+            </button>
+            <button onClick={() => { const el = document.querySelector('[data-value="site-settings"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Image className="w-4 h-4" />সাইট
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="container mx-auto p-2 sm:p-4">
