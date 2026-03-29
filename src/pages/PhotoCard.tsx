@@ -478,7 +478,8 @@ const PhotoCard = () => {
           ctx.fillStyle = "rgba(0,0,0,0.4)";
           ctx.fillRect(0, 0, W, H);
         }
-      } catch {
+      } catch (err) {
+        console.warn("Background image load failed, using color:", err);
         ctx.fillStyle = bgColor; ctx.fillRect(0, 0, W, H);
       }
     } else {
