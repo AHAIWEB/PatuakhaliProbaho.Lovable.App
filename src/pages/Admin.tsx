@@ -78,6 +78,7 @@ const Admin = () => {
 
   // Post search/filter
   const [postSearch, setPostSearch] = useState("");
+  const [showMobileActions, setShowMobileActions] = useState(false);
   const [postPage, setPostPage] = useState(0);
   const [postDateFilter, setPostDateFilter] = useState("");
   const [postSourceFilter, setPostSourceFilter] = useState<"all" | "rss" | "scraper" | "manual">("all");
