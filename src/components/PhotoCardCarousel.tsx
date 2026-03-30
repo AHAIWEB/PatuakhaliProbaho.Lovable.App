@@ -57,11 +57,11 @@ const PhotoCardCarousel = () => {
         }}
         className="w-full"
       >
-        <CarouselContent className="-ml-2 sm:-ml-3">
+        <CarouselContent className="-ml-3 sm:-ml-4">
           {cards.map((card) => (
             <CarouselItem
               key={card.id}
-              className="pl-2 sm:pl-3 basis-[42%] sm:basis-[28%] md:basis-[22%] lg:basis-[18%]"
+              className="pl-3 sm:pl-4 basis-[65%] sm:basis-[45%] md:basis-[35%] lg:basis-[28%]"
             >
               <Link to={`/post/${card.slug}`} className="group/card block">
                 <div className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
