@@ -831,12 +831,26 @@ const PhotoCard = () => {
     }
     setPostingToSite(true);
     try {
+      // Convert canvas preview (data URL) to blob and upload to storage
+      const blob = await (await fetch(preview)).blob();
+      const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+      const filePath = `photocards/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("site-assets")
+        .upload(filePath, blob, { contentType: blob.type, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("site-assets")
+        .getPublicUrl(filePath);
+      const uploadedImageUrl = urlData.publicUrl;
+
       const slug = customTitle.replace(/[^\u0980-\u09FFa-zA-Z0-9\s]/g, "").replace(/\s+/g, "-").toLowerCase() + "-" + Date.now();
       const { error } = await supabase.from("posts").insert({
         title: customTitle, slug,
         content: customQuote || customTitle,
         excerpt: customQuote || customTitle.substring(0, 200),
-        image_url: fetchedImage || preview,
+        image_url: uploadedImageUrl,
         status: "published",
         published_at: new Date().toISOString(),
         author_id: user?.id || null,
