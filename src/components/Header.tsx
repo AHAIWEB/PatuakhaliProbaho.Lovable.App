@@ -28,10 +28,9 @@ const Header = () => {
   return (
     <header className="bg-card border-b border-border py-2 sm:py-4">
       <div className="container mx-auto px-3 sm:px-4 flex items-center justify-between">
-        <div className="w-16 sm:w-32" />
-        <a href="/" className="flex flex-col items-center gap-0.5">
-          <img src={logo} alt={siteName} width={logoHeight * 2} height={logoHeight} style={{ height: `${Math.min(logoHeight, 48)}px` }} className="w-auto sm:h-auto" />
-          <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">{siteName}</span>
+        <a href="/" className="flex items-center gap-2">
+          <img src={logo} alt={siteName} width={logoHeight * 2} height={logoHeight} style={{ height: `${Math.max(logoHeight, 56)}px` }} className="w-auto h-10 sm:h-14 md:h-16" />
+          <span className="text-xs sm:text-sm md:text-base font-semibold text-foreground tracking-wide">{siteName}</span>
         </a>
         <div className="flex items-center gap-1 sm:gap-2 w-16 sm:w-32 justify-end">
           {loading ? null : user ? (

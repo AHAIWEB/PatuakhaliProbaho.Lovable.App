@@ -25,24 +25,44 @@ function extractText(html: string): string {
     .trim();
 }
 
+function isValidArticleUrl(url: string, baseUrl: string): boolean {
+  try {
+    const u = new URL(url);
+    const base = new URL(baseUrl);
+    // Must be same domain or subdomain
+    if (!u.hostname.endsWith(base.hostname.replace(/^www\./, "")) && !base.hostname.endsWith(u.hostname.replace(/^www\./, ""))) return false;
+    // Reject common non-article URLs
+    const path = u.pathname.toLowerCase();
+    const rejectPatterns = [
+      /^\/?$/, /\/tag\//i, /\/category\//i, /\/author\//i, /\/page\/\d/i,
+      /\/search/i, /\/login/i, /\/register/i, /\/contact/i, /\/about/i,
+      /\/privacy/i, /\/terms/i, /\.pdf$/i, /\.jpg$/i, /\.png$/i, /\.gif$/i,
+      /\/feed\/?$/i, /\/rss\/?$/i, /\/sitemap/i, /\/archive\/?$/i,
+      /^\/[a-z]{2}\/?$/i, // language root like /en/
+    ];
+    for (const p of rejectPatterns) {
+      if (p.test(path)) return false;
+    }
+    // Must have a meaningful path (at least some slug)
+    if (path.replace(/\//g, "").length < 5) return false;
+    return true;
+  } catch { return false; }
+}
+
 function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { title: string; url: string; image: string | null }[] {
   const links: { title: string; url: string; image: string | null }[] = [];
   const seen = new Set<string>();
 
-  // Custom selectors from config
   const articleSel = selectorConfig?.article;
-  const titleSel = selectorConfig?.title;
   const linkSel = selectorConfig?.link;
   const imgSel = selectorConfig?.image;
 
-  // Build patterns based on selectors or use defaults
   const patterns = [
     /<a[^>]+href=["']([^"'#]+)["'][^>]*>[\s\S]*?<(?:h[1-6]|span|div)[^>]*>([\s\S]*?)<\/(?:h[1-6]|span|div)>[\s\S]*?<\/a>/gi,
     /<h[1-6][^>]*>\s*<a[^>]+href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h[1-6]>/gi,
     /<a[^>]+href=["']([^"']+)["'][^>]*title=["']([^"']+)["']/gi,
   ];
 
-  // If custom article/link selectors provided, also try class-based patterns
   if (articleSel || linkSel) {
     const classMatch = (articleSel || linkSel || "").replace(/^\./, "");
     if (classMatch) {
@@ -56,16 +76,18 @@ function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { ti
       let url = match[1].trim();
       const title = extractText(match[2]).trim();
       if (!title || title.length < 10) continue;
+      // Reject titles that look like navigation/menu items
+      if (title.length > 300) continue;
 
       try {
         if (url.startsWith("/")) url = new URL(url, baseUrl).href;
         else if (!url.startsWith("http")) continue;
       } catch { continue; }
 
+      if (!isValidArticleUrl(url, baseUrl)) continue;
       if (seen.has(url)) continue;
       seen.add(url);
 
-      // Find nearby image - use custom selector or default
       const searchArea = html.substring(
         Math.max(0, (match.index || 0) - 500),
         (match.index || 0) + match[0].length + 500
