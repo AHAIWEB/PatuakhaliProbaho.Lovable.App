@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
             return {
               title: article.title,
               slug: generateSlug(article.title),
-              content: article.title,
+              content: `<p>${article.title}</p>`,
               excerpt: article.title.substring(0, 200),
               image_url: article.image,
               source_url: article.url,
