@@ -25,25 +25,63 @@ function extractText(html: string): string {
     .trim();
 }
 
+function extractArticleContent(html: string): { content: string; excerpt: string; image: string | null } {
+  let articleHtml = "";
+  const articlePatterns = [
+    /<article[^>]*>([\s\S]*?)<\/article>/i,
+    /<div[^>]+class="[^"]*(?:story-content|article-body|entry-content|post-content|news-content|content-body|main-content|story-element|article-content-body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    /<div[^>]+itemprop="articleBody"[^>]*>([\s\S]*?)<\/div>/i,
+  ];
+  for (const pattern of articlePatterns) {
+    const match = html.match(pattern);
+    if (match) { articleHtml = match[1] || match[0]; break; }
+  }
+  const source = articleHtml || html;
+  const paragraphs: string[] = [];
+  const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let m;
+  while ((m = pRegex.exec(source)) !== null) {
+    const text = extractText(m[1]).trim();
+    if (text.length > 25) paragraphs.push(text);
+  }
+  const imgMatch = source.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return {
+    content: paragraphs.length > 0 ? paragraphs.map(p => `<p>${p}</p>`).join("\n") : "",
+    excerpt: paragraphs.length > 0 ? paragraphs[0].substring(0, 300) : "",
+    image: imgMatch?.[1] || null,
+  };
+}
+
+async function fetchArticleContent(url: string): Promise<{ content: string; excerpt: string; image: string | null }> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
+      signal: AbortSignal.timeout(10000),
+      redirect: "follow",
+    });
+    if (!res.ok) return { content: "", excerpt: "", image: null };
+    return extractArticleContent(await res.text());
+  } catch {
+    return { content: "", excerpt: "", image: null };
+  }
+}
+
 function isValidArticleUrl(url: string, baseUrl: string): boolean {
   try {
     const u = new URL(url);
     const base = new URL(baseUrl);
-    // Must be same domain or subdomain
     if (!u.hostname.endsWith(base.hostname.replace(/^www\./, "")) && !base.hostname.endsWith(u.hostname.replace(/^www\./, ""))) return false;
-    // Reject common non-article URLs
     const path = u.pathname.toLowerCase();
     const rejectPatterns = [
       /^\/?$/, /\/tag\//i, /\/category\//i, /\/author\//i, /\/page\/\d/i,
       /\/search/i, /\/login/i, /\/register/i, /\/contact/i, /\/about/i,
       /\/privacy/i, /\/terms/i, /\.pdf$/i, /\.jpg$/i, /\.png$/i, /\.gif$/i,
       /\/feed\/?$/i, /\/rss\/?$/i, /\/sitemap/i, /\/archive\/?$/i,
-      /^\/[a-z]{2}\/?$/i, // language root like /en/
+      /^\/[a-z]{2}\/?$/i,
     ];
     for (const p of rejectPatterns) {
       if (p.test(path)) return false;
     }
-    // Must have a meaningful path (at least some slug)
     if (path.replace(/\//g, "").length < 5) return false;
     return true;
   } catch { return false; }
@@ -52,7 +90,6 @@ function isValidArticleUrl(url: string, baseUrl: string): boolean {
 function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { title: string; url: string; image: string | null }[] {
   const links: { title: string; url: string; image: string | null }[] = [];
   const seen = new Set<string>();
-
   const articleSel = selectorConfig?.article;
   const linkSel = selectorConfig?.link;
   const imgSel = selectorConfig?.image;
@@ -75,9 +112,7 @@ function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { ti
     while ((match = pattern.exec(html)) !== null) {
       let url = match[1].trim();
       const title = extractText(match[2]).trim();
-      if (!title || title.length < 10) continue;
-      // Reject titles that look like navigation/menu items
-      if (title.length > 300) continue;
+      if (!title || title.length < 10 || title.length > 300) continue;
 
       try {
         if (url.startsWith("/")) url = new URL(url, baseUrl).href;
@@ -104,7 +139,6 @@ function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { ti
         const nearbyImg = searchArea.match(/<img[^>]+src=["']([^"']+)["']/i);
         image = nearbyImg?.[1] || null;
       }
-      
       if (image && image.startsWith("/")) {
         try { image = new URL(image, baseUrl).href; } catch { image = null; }
       }
@@ -112,7 +146,6 @@ function extractLinks(html: string, baseUrl: string, selectorConfig?: any): { ti
       links.push({ title, url, image });
     }
   }
-
   return links.slice(0, 20);
 }
 
@@ -179,7 +212,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify auth
     const authError = await verifyAdminOrCron(req);
     if (authError) return authError;
 
@@ -187,7 +219,6 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get sources due for scraping
     const now = new Date();
     const { data: sources, error: srcError } = await supabase
       .from("scrape_sources")
@@ -203,7 +234,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Filter sources that are due (interval elapsed)
     const dueSources = sources.filter((s) => {
       if (!s.last_scraped_at) return true;
       const elapsed = (now.getTime() - new Date(s.last_scraped_at).getTime()) / 60000;
@@ -216,7 +246,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Load categories
     const { data: dbCategories } = await supabase.from("categories").select("id, slug");
     const categoryMap = new Map<string, string>();
     if (dbCategories) {
@@ -224,6 +253,7 @@ Deno.serve(async (req) => {
     }
 
     let totalInserted = 0;
+    let contentFetched = 0;
     const errors: string[] = [];
 
     for (const source of dueSources) {
@@ -255,28 +285,44 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Check for duplicates
         const urls = articles.map((a) => a.url);
         const { data: existing } = await supabase
           .from("posts")
           .select("source_url")
           .in("source_url", urls);
         const existingUrls = new Set((existing || []).map((p) => p.source_url));
-
         const newArticles = articles.filter((a) => !existingUrls.has(a.url));
 
         if (newArticles.length > 0) {
-          const rows = newArticles.map((article) => {
+          // Fetch full content for up to 5 articles per source (to avoid timeout)
+          const articlesWithContent = await Promise.all(
+            newArticles.slice(0, 5).map(async (article) => {
+              const fullContent = await fetchArticleContent(article.url);
+              return { ...article, fullContent };
+            })
+          );
+          // For remaining articles (6+), use title-only content
+          const remainingArticles = newArticles.slice(5).map((article) => ({
+            ...article,
+            fullContent: { content: "", excerpt: "", image: null as string | null },
+          }));
+
+          const allArticles = [...articlesWithContent, ...remainingArticles];
+
+          const rows = allArticles.map((article) => {
             const matchedSlug = matchCategory(`${source.category || ""} ${source.name} ${article.title}`);
             let categoryId: string | null = null;
             if (matchedSlug && categoryMap.has(matchedSlug)) categoryId = categoryMap.get(matchedSlug)!;
 
+            const hasFullContent = article.fullContent.content.length > 50;
+            if (hasFullContent) contentFetched++;
+
             return {
               title: article.title,
               slug: generateSlug(article.title),
-              content: `<p>${article.title}</p>`,
-              excerpt: article.title.substring(0, 200),
-              image_url: article.image,
+              content: hasFullContent ? article.fullContent.content : `<p>${article.title}</p>`,
+              excerpt: hasFullContent ? article.fullContent.excerpt : article.title.substring(0, 200),
+              image_url: article.image || article.fullContent.image,
               source_url: article.url,
               source_name: source.name,
               division: source.division,
@@ -321,6 +367,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         message: "Auto-scrape complete",
         scraped: totalInserted,
+        contentFetched,
         processedSources: dueSources.length,
         errors: errors.slice(0, 10),
       }),
