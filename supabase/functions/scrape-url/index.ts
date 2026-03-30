@@ -1,7 +1,54 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function isPrivateUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (!["http:", "https:"].includes(parsed.protocol)) return true;
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") return true;
+    if (hostname === "metadata.google.internal") return true;
+    const parts = hostname.split(".").map(Number);
+    if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+      if (parts[0] === 10) return true;
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+      if (parts[0] === 192 && parts[1] === 168) return true;
+      if (parts[0] === 169 && parts[1] === 254) return true;
+      if (parts[0] === 127) return true;
+      if (parts[0] === 0) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+async function verifyAdmin(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+  const token = authHeader.replace("Bearer ", "");
+  const { data, error } = await supabase.auth.getClaims(token);
+  if (error || !data?.claims) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const userId = data.claims.sub;
+  const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+  if (!roleData || !["admin", "editor"].includes(roleData.role)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  return null;
+}
 
 function extractText(html: string): string {
   return html
@@ -133,9 +180,21 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Verify auth
+    const authError = await verifyAdmin(req);
+    if (authError) return authError;
+
     const { url, fullContent } = await req.json();
-    if (!url) {
+    if (!url || typeof url !== "string") {
       return new Response(JSON.stringify({ error: "URL required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // SSRF protection
+    if (isPrivateUrl(url)) {
+      return new Response(JSON.stringify({ error: "URL not allowed" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
