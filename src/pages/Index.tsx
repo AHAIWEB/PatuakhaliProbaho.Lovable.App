@@ -336,6 +336,34 @@ const Index = () => {
                 <MasonryGrid posts={(entertainmentPosts ?? []).slice(0, sc("entertainment", 4))} columns={2} />
               </div>
             )}
+
+            {sc("health") > 0 && (healthPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="স্বাস্থ্য" />
+                <MasonryGrid posts={(healthPosts ?? []).slice(0, sc("health", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("lifestyle") > 0 && (lifestylePosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="লাইফস্টাইল" />
+                <MasonryGrid posts={(lifestylePosts ?? []).slice(0, sc("lifestyle", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("religion") > 0 && (religionPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="ধর্ম" />
+                <MasonryGrid posts={(religionPosts ?? []).slice(0, sc("religion", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("travel") > 0 && (travelPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="ভ্রমণ" />
+                <MasonryGrid posts={(travelPosts ?? []).slice(0, sc("travel", 4))} columns={2} />
+              </div>
+            )}
           </div>
 
           {/* ========= RIGHT SIDEBAR - Pinterest Style ========= */}
