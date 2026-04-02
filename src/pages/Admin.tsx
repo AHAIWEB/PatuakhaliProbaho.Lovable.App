@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
@@ -181,6 +181,27 @@ const Admin = () => {
     setFetchProgress("");
     toast({ title: "সফল", description: `মোট ${totalFetched}টি নিউজ ফেচ হয়েছে` });
     fetchData();
+    setLoading(false);
+  };
+
+  const [backfillProgress, setBackfillProgress] = useState("");
+
+  const handleBackfill = async () => {
+    setLoading(true);
+    setBackfillProgress("ব্যাকফিল চলছে...");
+    try {
+      const { data, error } = await supabase.functions.invoke("backfill-content");
+      if (error) throw error;
+      setBackfillProgress("");
+      toast({
+        title: "সফল",
+        description: `${data?.updated || 0}টি পোস্ট আপডেট হয়েছে (${data?.total_checked || 0}টি চেক করা হয়েছে)`,
+      });
+      fetchData();
+    } catch (e: any) {
+      toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
+      setBackfillProgress("");
+    }
     setLoading(false);
   };
 
@@ -775,6 +796,10 @@ const Admin = () => {
                     <CardTitle className="text-sm sm:text-base">RSS ম্যানেজার ({feeds.length})</CardTitle>
                     <div className="flex items-center gap-2">
                       {fetchProgress && <span className="text-[10px] text-muted-foreground">{fetchProgress}</span>}
+                      {backfillProgress && <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>}
+                      <Button onClick={handleBackfill} disabled={loading} size="sm" variant="outline" className="h-8 text-xs">
+                        <Database className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ব্যাকফিল
+                      </Button>
                       <Button onClick={handleFetchRSS} disabled={loading} size="sm" className="h-8 text-xs">
                         <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ফেচ
                       </Button>
