@@ -24,49 +24,69 @@ import { ExternalLink } from "lucide-react";
 import { cleanText } from "@/lib/content";
 import type { Post } from "@/hooks/usePosts";
 
-const useCategoryPosts = (slug: string, limit = 4) =>
+const useCategoryPosts = (slug: string, limit = 4, aliases: string[] = []) =>
   useQuery({
-    queryKey: ["posts", "catSlug", slug, limit],
+    queryKey: ["posts", "catSlug", slug, [...aliases].sort().join("|"), limit],
     queryFn: async () => {
-      const { data: cat } = await supabase
+      const slugOptions = Array.from(new Set([slug, ...aliases]));
+
+      const { data: cats, error: categoryError } = await supabase
         .from("categories")
         .select("id")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (!cat) return [];
+        .in("slug", slugOptions);
+      if (categoryError) throw categoryError;
+
+      const rootCategoryIds = (cats || []).map((cat) => cat.id);
 
       // Get sub-category IDs too
-      const { data: subCats } = await supabase
-        .from("categories")
-        .select("id")
-        .eq("parent_id", cat.id);
-      const allCatIds = [cat.id, ...(subCats || []).map((c) => c.id)];
+      const { data: subCats, error: subCategoryError } = rootCategoryIds.length > 0
+        ? await supabase
+            .from("categories")
+            .select("id")
+            .in("parent_id", rootCategoryIds)
+        : { data: [], error: null };
+      if (subCategoryError) throw subCategoryError;
+
+      const allCatIds = [...rootCategoryIds, ...(subCats || []).map((c) => c.id)];
+      const ids = new Set<string>();
+      const merged: Post[] = [];
 
       // First: posts with matching category_id
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .in("category_id", allCatIds)
-        .eq("status", "published")
-        .order("published_at", { ascending: false })
-        .limit(limit);
-      if (error) throw error;
+      if (allCatIds.length > 0) {
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .in("category_id", allCatIds)
+          .eq("status", "published")
+          .order("published_at", { ascending: false })
+          .limit(limit);
+        if (error) throw error;
 
-      // If enough posts, return them
-      if ((data ?? []).length >= limit) return data ?? [];
+        for (const post of data ?? []) {
+          if (!ids.has(post.id) && merged.length < limit) {
+            ids.add(post.id);
+            merged.push(post);
+          }
+        }
+      }
+
+      if (merged.length >= limit) return merged;
 
       // Fallback: also match by source_category or tags
-      const { data: fallback } = await supabase
+      const fallbackFilters = slugOptions
+        .flatMap((candidate) => [`source_category.eq.${candidate}`, `tags.cs.{${candidate}}`])
+        .join(",");
+
+      const { data: fallback, error: fallbackError } = await supabase
         .from("posts")
         .select("*")
         .eq("status", "published")
-        .or(`source_category.eq.${slug},tags.cs.{${slug}}`)
+        .or(fallbackFilters)
         .order("published_at", { ascending: false })
         .limit(limit);
+      if (fallbackError) throw fallbackError;
 
       // Merge without duplicates
-      const ids = new Set((data ?? []).map((p) => p.id));
-      const merged = [...(data ?? [])];
       for (const p of fallback ?? []) {
         if (!ids.has(p.id) && merged.length < limit) {
           merged.push(p);
@@ -75,6 +95,7 @@ const useCategoryPosts = (slug: string, limit = 4) =>
       }
       return merged;
     },
+    enabled: limit > 0,
   });
 
 /* Pinterest-style masonry card with variable heights and animations */
@@ -199,7 +220,7 @@ const Index = () => {
   const { data: politicsPosts } = useCategoryPosts("politics", sc("politics", 4));
   const { data: sportsPosts } = useCategoryPosts("sports", sc("sports", 4));
   const { data: entertainmentPosts } = useCategoryPosts("entertainment", sc("entertainment", 4));
-  const { data: internationalPosts } = useCategoryPosts("international", sc("international", 4));
+  const { data: internationalPosts } = useCategoryPosts("world", sc("international", 4), ["international"]);
   const { data: techPosts } = useCategoryPosts("technology", sc("technology", 3));
 
   const divisionSections = [

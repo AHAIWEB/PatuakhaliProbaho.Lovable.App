@@ -183,7 +183,18 @@ function matchCategory(text: string): string | null {
   return null;
 }
 
+function isAuthorizedCronRequest(req: Request): boolean {
+  const authHeader = req.headers.get("Authorization");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  return !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+}
+
 async function verifyAdminOrCron(req: Request): Promise<Response | null> {
+  if (isAuthorizedCronRequest(req)) {
+    return null;
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -212,6 +223,16 @@ Deno.serve(async (req) => {
   }
 
   try {
+    let batchSize = 20;
+    try {
+      const body = await req.json();
+      if (body?.batchSize) {
+        batchSize = Math.min(Math.max(Number(body.batchSize), 1), 25);
+      }
+    } catch {
+      // scheduled calls may not send a body
+    }
+
     const authError = await verifyAdminOrCron(req);
     if (authError) return authError;
 
@@ -225,7 +246,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("is_active", true)
       .order("last_scraped_at", { ascending: true, nullsFirst: true })
-      .limit(10);
+      .limit(batchSize);
 
     if (srcError) throw srcError;
     if (!sources || sources.length === 0) {
@@ -252,11 +273,11 @@ Deno.serve(async (req) => {
       for (const cat of dbCategories) categoryMap.set(cat.slug, cat.id);
     }
 
-    let totalInserted = 0;
-    let contentFetched = 0;
-    const errors: string[] = [];
+    const processSource = async (source: typeof dueSources[number]) => {
+      let insertedCount = 0;
+      let fetchedContentCount = 0;
+      const sourceErrors: string[] = [];
 
-    for (const source of dueSources) {
       try {
         const response = await fetch(source.url, {
           headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
@@ -269,8 +290,8 @@ Deno.serve(async (req) => {
             last_scraped_at: now.toISOString(),
             last_error: `HTTP ${response.status}`,
           }).eq("id", source.id);
-          errors.push(`${source.name}: HTTP ${response.status}`);
-          continue;
+          sourceErrors.push(`${source.name}: HTTP ${response.status}`);
+          return { insertedCount, fetchedContentCount, sourceErrors };
         }
 
         const html = await response.text();
@@ -282,7 +303,7 @@ Deno.serve(async (req) => {
             last_scraped_at: now.toISOString(),
             last_error: "No articles found",
           }).eq("id", source.id);
-          continue;
+          return { insertedCount, fetchedContentCount, sourceErrors };
         }
 
         const urls = articles.map((a) => a.url);
@@ -315,7 +336,7 @@ Deno.serve(async (req) => {
             if (matchedSlug && categoryMap.has(matchedSlug)) categoryId = categoryMap.get(matchedSlug)!;
 
             const hasFullContent = article.fullContent.content.length > 50;
-            if (hasFullContent) contentFetched++;
+            if (hasFullContent) fetchedContentCount++;
 
             return {
               title: article.title,
@@ -328,7 +349,7 @@ Deno.serve(async (req) => {
               division: source.division,
               district: source.district,
               upazila: source.upazila,
-              source_category: source.source_category || source.category,
+              source_category: matchedSlug || source.source_category || source.category,
               tags: [],
               status: "published",
               published_at: now.toISOString(),
@@ -342,9 +363,9 @@ Deno.serve(async (req) => {
             .select("id");
 
           if (!insertError && inserted) {
-            totalInserted += inserted.length;
+            insertedCount += inserted.length;
           } else if (insertError) {
-            errors.push(`${source.name}: ${insertError.message}`);
+            sourceErrors.push(`${source.name}: ${insertError.message}`);
           }
         }
 
@@ -355,11 +376,33 @@ Deno.serve(async (req) => {
 
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
-        errors.push(`${source.name}: ${msg}`);
+        sourceErrors.push(`${source.name}: ${msg}`);
         await supabase.from("scrape_sources").update({
           last_scraped_at: now.toISOString(),
           last_error: msg,
         }).eq("id", source.id);
+      }
+
+      return { insertedCount, fetchedContentCount, sourceErrors };
+    };
+
+    let totalInserted = 0;
+    let contentFetched = 0;
+    const errors: string[] = [];
+    const SOURCE_CONCURRENCY = 4;
+
+    for (let i = 0; i < dueSources.length; i += SOURCE_CONCURRENCY) {
+      const chunk = dueSources.slice(i, i + SOURCE_CONCURRENCY);
+      const results = await Promise.allSettled(chunk.map(processSource));
+
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          totalInserted += result.value.insertedCount;
+          contentFetched += result.value.fetchedContentCount;
+          errors.push(...result.value.sourceErrors);
+        } else {
+          errors.push(result.reason instanceof Error ? result.reason.message : "Unknown source processing error");
+        }
       }
     }
 

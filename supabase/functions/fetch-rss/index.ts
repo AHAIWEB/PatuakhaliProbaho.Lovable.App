@@ -70,6 +70,13 @@ function generateSlug(title: string): string {
     .substring(0, 100) + "-" + Date.now().toString(36);
 }
 
+function isAuthorizedCronRequest(req: Request): boolean {
+  const authHeader = req.headers.get("Authorization");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  return !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+}
+
 const categoryKeywords: Record<string, string[]> = {
   "national": ["জাতীয়", "national", "bangladesh", "বাংলাদেশ", "সরকার", "government"],
   "politics": ["রাজনীতি", "politics", "political", "সংসদ", "নির্বাচন", "election"],
@@ -86,8 +93,8 @@ const categoryKeywords: Record<string, string[]> = {
   "trending": ["আলোচিত", "trending", "viral", "ভাইরাল"],
 };
 
-function matchCategorySlug(feedCategory: string, itemCategory: string | null, feedName: string): string | null {
-  const searchText = `${feedCategory} ${itemCategory || ""} ${feedName}`.toLowerCase();
+function matchCategorySlug(feedCategory: string, itemCategory: string | null, feedName: string, title: string, description: string): string | null {
+  const searchText = `${feedCategory} ${itemCategory || ""} ${feedName} ${title} ${description}`.toLowerCase();
   for (const [slug, keywords] of Object.entries(categoryKeywords)) {
     for (const kw of keywords) {
       if (searchText.includes(kw.toLowerCase())) return slug;
@@ -97,6 +104,10 @@ function matchCategorySlug(feedCategory: string, itemCategory: string | null, fe
 }
 
 async function verifyAdminOrEditor(req: Request): Promise<Response | null> {
+  if (isAuthorizedCronRequest(req)) {
+    return null;
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -198,7 +209,7 @@ Deno.serve(async (req) => {
         if (newItems.length > 0) {
           const rows = newItems.map((item) => {
             let categoryId: string | null = null;
-            const matchedSlug = matchCategorySlug(feed.category || "", item.category, feed.name);
+            const matchedSlug = matchCategorySlug(feed.category || "", item.category, feed.name, item.title, item.description);
             if (matchedSlug && categoryMap.has(matchedSlug)) {
               categoryId = categoryMap.get(matchedSlug)!;
             }
@@ -215,6 +226,7 @@ Deno.serve(async (req) => {
               source_url: item.link,
               source_name: feed.name,
               division: feed.division,
+              source_category: matchedSlug || item.category || feed.category,
               tags: item.category ? [item.category] : [],
               status: "published",
               rss_feed_id: feed.id,
