@@ -796,6 +796,10 @@ const Admin = () => {
                     <CardTitle className="text-sm sm:text-base">RSS ম্যানেজার ({feeds.length})</CardTitle>
                     <div className="flex items-center gap-2">
                       {fetchProgress && <span className="text-[10px] text-muted-foreground">{fetchProgress}</span>}
+                      {backfillProgress && <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>}
+                      <Button onClick={handleBackfill} disabled={loading} size="sm" variant="outline" className="h-8 text-xs">
+                        <Database className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ব্যাকফিল
+                      </Button>
                       <Button onClick={handleFetchRSS} disabled={loading} size="sm" className="h-8 text-xs">
                         <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ফেচ
                       </Button>
