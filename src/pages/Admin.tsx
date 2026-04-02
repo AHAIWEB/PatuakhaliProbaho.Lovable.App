@@ -184,6 +184,27 @@ const Admin = () => {
     setLoading(false);
   };
 
+  const [backfillProgress, setBackfillProgress] = useState("");
+
+  const handleBackfill = async () => {
+    setLoading(true);
+    setBackfillProgress("ব্যাকফিল চলছে...");
+    try {
+      const { data, error } = await supabase.functions.invoke("backfill-content");
+      if (error) throw error;
+      setBackfillProgress("");
+      toast({
+        title: "সফল",
+        description: `${data?.updated || 0}টি পোস্ট আপডেট হয়েছে (${data?.total_checked || 0}টি চেক করা হয়েছে)`,
+      });
+      fetchData();
+    } catch (e: any) {
+      toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
+      setBackfillProgress("");
+    }
+    setLoading(false);
+  };
+
   const toggleFeatured = async (post: Post) => {
     await supabase.from("posts").update({ is_featured: !post.is_featured }).eq("id", post.id);
     fetchData();
