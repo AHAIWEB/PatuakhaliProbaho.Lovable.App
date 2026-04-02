@@ -222,6 +222,10 @@ const Index = () => {
   const { data: entertainmentPosts } = useCategoryPosts("entertainment", sc("entertainment", 4));
   const { data: internationalPosts } = useCategoryPosts("world", sc("international", 4), ["international"]);
   const { data: techPosts } = useCategoryPosts("technology", sc("technology", 3));
+  const { data: healthPosts } = useCategoryPosts("health", sc("health", 4));
+  const { data: lifestylePosts } = useCategoryPosts("lifestyle", sc("lifestyle", 4));
+  const { data: religionPosts } = useCategoryPosts("religion", sc("religion", 4));
+  const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
