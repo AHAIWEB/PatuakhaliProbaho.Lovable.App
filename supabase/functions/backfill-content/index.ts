@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     let updated = 0;
     const errors: string[] = [];
 
-    for (const post of needsUpdate.slice(0, 30)) {
+    for (const post of needsUpdate.slice(0, 10)) {
       try {
         const resp = await fetch(post.source_url, {
           headers: {
