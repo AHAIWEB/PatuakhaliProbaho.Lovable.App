@@ -69,6 +69,16 @@ const CategoryNav = () => {
             );
           })}
 
+          {/* Gallery link */}
+          <li>
+            <button
+              onClick={() => { navigate("/gallery"); setMobileOpen(false); }}
+              className="flex items-center gap-1 px-3 py-2.5 hover:bg-primary/80 transition-colors whitespace-nowrap w-full text-left"
+            >
+              📸 গ্যালারি
+            </button>
+          </li>
+
           {/* Division dropdown */}
           <li
             className="relative group"
