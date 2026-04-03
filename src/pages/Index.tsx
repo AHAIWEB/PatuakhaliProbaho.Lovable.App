@@ -366,6 +366,20 @@ const Index = () => {
                 <MasonryGrid posts={(travelPosts ?? []).slice(0, sc("travel", 4))} columns={2} />
               </div>
             )}
+
+            {sc("people") > 0 && (peoplePosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="পিপল" />
+                <MasonryGrid posts={(peoplePosts ?? []).slice(0, sc("people", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("jobs") > 0 && (jobsPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="চাকরি" />
+                <MasonryGrid posts={(jobsPosts ?? []).slice(0, sc("jobs", 4))} columns={2} />
+              </div>
+            )}
           </div>
 
           {/* ========= RIGHT SIDEBAR - Division Sections (mobile first) ========= */}
