@@ -254,7 +254,7 @@ const Index = () => {
 
           {/* ========= LEFT SIDEBAR - Pinterest Style ========= */}
           {sc("national") > 0 && (
-            <aside className="lg:col-span-3 order-2 lg:order-1 space-y-4">
+            <aside className="lg:col-span-3 order-3 lg:order-1 space-y-4">
               <SectionTitle title="জাতীয় সংবাদ" accent="red" />
               <div className="columns-1 gap-3">
                 {(nationalPosts ?? []).map((news, i) => (
