@@ -35,14 +35,22 @@ const PhotoCardCarousel = () => {
   const [api, setApi] = useState<CarouselApi>();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Autoplay
+  // Autoplay - pause on touch
+  const [isPaused, setIsPaused] = useState(false);
   useEffect(() => {
-    if (!api) return;
+    if (!api || isPaused) return;
     const interval = setInterval(() => {
       api.scrollNext();
     }, 4000);
     return () => clearInterval(interval);
-  }, [api]);
+  }, [api, isPaused]);
+
+  // Touch handlers for smoother mobile control
+  const handlePointerDown = useCallback(() => setIsPaused(true), []);
+  const handlePointerUp = useCallback(() => {
+    // Resume autoplay after 3 seconds of inactivity
+    setTimeout(() => setIsPaused(false), 3000);
+  }, []);
 
   // Lightbox keyboard nav
   useEffect(() => {
@@ -85,8 +93,11 @@ const PhotoCardCarousel = () => {
             align: "start",
             loop: true,
             dragFree: true,
+            skipSnaps: false,
           }}
-          className="w-full"
+          className="w-full touch-pan-y"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
         >
           <CarouselContent className="-ml-3 sm:-ml-4">
             {cards.map((card, idx) => (

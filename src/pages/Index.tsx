@@ -226,6 +226,8 @@ const Index = () => {
   const { data: lifestylePosts } = useCategoryPosts("lifestyle", sc("lifestyle", 4));
   const { data: religionPosts } = useCategoryPosts("religion", sc("religion", 4));
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
+  const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
+  const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
@@ -254,7 +256,7 @@ const Index = () => {
 
           {/* ========= LEFT SIDEBAR - Pinterest Style ========= */}
           {sc("national") > 0 && (
-            <aside className="lg:col-span-3 order-2 lg:order-1 space-y-4">
+            <aside className="lg:col-span-3 order-3 lg:order-1 space-y-4">
               <SectionTitle title="জাতীয় সংবাদ" accent="red" />
               <div className="columns-1 gap-3">
                 {(nationalPosts ?? []).map((news, i) => (
@@ -300,7 +302,7 @@ const Index = () => {
           )}
 
           {/* ========= MAIN - Pinterest Masonry ========= */}
-          <div className="lg:col-span-6 order-1 lg:order-2">
+          <div className="lg:col-span-6 order-2 lg:order-2">
             <FeaturedSlider />
             <PhotoCardCarousel />
 
@@ -364,10 +366,24 @@ const Index = () => {
                 <MasonryGrid posts={(travelPosts ?? []).slice(0, sc("travel", 4))} columns={2} />
               </div>
             )}
+
+            {sc("people") > 0 && (peoplePosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="পিপল" />
+                <MasonryGrid posts={(peoplePosts ?? []).slice(0, sc("people", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("jobs") > 0 && (jobsPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="চাকরি" />
+                <MasonryGrid posts={(jobsPosts ?? []).slice(0, sc("jobs", 4))} columns={2} />
+              </div>
+            )}
           </div>
 
-          {/* ========= RIGHT SIDEBAR - Pinterest Style ========= */}
-          <aside className="lg:col-span-3 order-3 space-y-4">
+          {/* ========= RIGHT SIDEBAR - Division Sections (mobile first) ========= */}
+          <aside className="lg:col-span-3 order-1 lg:order-3 space-y-4">
             {divisionSections.map((section) => {
               const count = sc(section.slug, 3);
               if (count <= 0 || !(section.posts ?? []).length) return null;

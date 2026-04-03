@@ -185,22 +185,36 @@ const Admin = () => {
   };
 
   const [backfillProgress, setBackfillProgress] = useState("");
+  const [backfillStats, setBackfillStats] = useState<{ updated: number; total: number; running: boolean }>({ updated: 0, total: 0, running: false });
 
   const handleBackfill = async () => {
     setLoading(true);
-    setBackfillProgress("ব্যাকফিল চলছে...");
+    setBackfillStats({ updated: 0, total: 0, running: true });
+    setBackfillProgress("ব্যাকফিল শুরু হচ্ছে...");
+    let totalUpdated = 0;
+    let totalChecked = 0;
     try {
-      const { data, error } = await supabase.functions.invoke("backfill-content");
-      if (error) throw error;
+      // Run multiple batches
+      for (let batch = 0; batch < 5; batch++) {
+        setBackfillProgress(`ব্যাচ ${batch + 1}/5 প্রসেসিং...`);
+        const { data, error } = await supabase.functions.invoke("backfill-content");
+        if (error) throw error;
+        totalUpdated += data?.updated || 0;
+        totalChecked += data?.total_checked || 0;
+        setBackfillStats({ updated: totalUpdated, total: totalChecked, running: true });
+        if ((data?.updated || 0) === 0) break; // No more to process
+      }
       setBackfillProgress("");
+      setBackfillStats({ updated: totalUpdated, total: totalChecked, running: false });
       toast({
         title: "সফল",
-        description: `${data?.updated || 0}টি পোস্ট আপডেট হয়েছে (${data?.total_checked || 0}টি চেক করা হয়েছে)`,
+        description: `${totalUpdated}টি পোস্ট আপডেট হয়েছে (${totalChecked}টি চেক করা হয়েছে)`,
       });
       fetchData();
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
       setBackfillProgress("");
+      setBackfillStats(prev => ({ ...prev, running: false }));
     }
     setLoading(false);
   };
@@ -796,7 +810,19 @@ const Admin = () => {
                     <CardTitle className="text-sm sm:text-base">RSS ম্যানেজার ({feeds.length})</CardTitle>
                     <div className="flex items-center gap-2">
                       {fetchProgress && <span className="text-[10px] text-muted-foreground">{fetchProgress}</span>}
-                      {backfillProgress && <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>}
+                      {backfillProgress && (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>
+                          {backfillStats.running && (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-accent rounded-full transition-all duration-500" style={{ width: `${backfillStats.total > 0 ? Math.min((backfillStats.updated / Math.max(backfillStats.total, 1)) * 100, 100) : 10}%` }} />
+                              </div>
+                              <span className="text-[9px] text-accent font-medium">{backfillStats.updated}/{backfillStats.total}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <Button onClick={handleBackfill} disabled={loading} size="sm" variant="outline" className="h-8 text-xs">
                         <Database className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ব্যাকফিল
                       </Button>
@@ -923,7 +949,9 @@ const Admin = () => {
                   <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeCategory} onChange={(e) => setScrapeCategory(e.target.value)}>
                     {[
                       ["general", "সাধারণ"], ["national", "জাতীয়"], ["international", "আন্তর্জাতিক"], ["divisional", "বিভাগীয়"],
-                      ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"], ["technology", "প্রযুক্তি"], ["economy", "অর্থনীতি"],
+                      ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"], ["technology", "প্রযুক্তি"],
+                      ["economy", "অর্থনীতি"], ["health", "স্বাস্থ্য"], ["lifestyle", "লাইফস্টাইল"], ["religion", "ধর্ম"],
+                      ["travel", "ভ্রমণ"], ["people", "পিপল"], ["jobs", "চাকরি"], ["gallery", "গ্যালারি"],
                     ].map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                   <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeInterval} onChange={(e) => setScrapeInterval(e.target.value)}>
