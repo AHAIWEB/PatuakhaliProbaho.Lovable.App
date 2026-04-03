@@ -9,6 +9,7 @@ import Auth from "./pages/Auth.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Admin from "./pages/Admin.tsx";
 import PhotoCard from "./pages/PhotoCard.tsx";
+import Gallery from "./pages/Gallery.tsx";
 import CategoryPage from "./pages/CategoryPage.tsx";
 import PostDetail from "./pages/PostDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
