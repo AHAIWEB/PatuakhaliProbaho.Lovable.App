@@ -226,6 +226,8 @@ const Index = () => {
   const { data: lifestylePosts } = useCategoryPosts("lifestyle", sc("lifestyle", 4));
   const { data: religionPosts } = useCategoryPosts("religion", sc("religion", 4));
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
+  const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
+  const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
