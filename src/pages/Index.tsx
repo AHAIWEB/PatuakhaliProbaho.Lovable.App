@@ -300,7 +300,7 @@ const Index = () => {
           )}
 
           {/* ========= MAIN - Pinterest Masonry ========= */}
-          <div className="lg:col-span-6 order-1 lg:order-2">
+          <div className="lg:col-span-6 order-2 lg:order-2">
             <FeaturedSlider />
             <PhotoCardCarousel />
 
