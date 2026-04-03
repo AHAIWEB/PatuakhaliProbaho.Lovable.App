@@ -923,7 +923,9 @@ const Admin = () => {
                   <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeCategory} onChange={(e) => setScrapeCategory(e.target.value)}>
                     {[
                       ["general", "সাধারণ"], ["national", "জাতীয়"], ["international", "আন্তর্জাতিক"], ["divisional", "বিভাগীয়"],
-                      ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"], ["technology", "প্রযুক্তি"], ["economy", "অর্থনীতি"],
+                      ["sports", "খেলা"], ["entertainment", "বিনোদন"], ["education", "শিক্ষা"], ["technology", "প্রযুক্তি"],
+                      ["economy", "অর্থনীতি"], ["health", "স্বাস্থ্য"], ["lifestyle", "লাইফস্টাইল"], ["religion", "ধর্ম"],
+                      ["travel", "ভ্রমণ"], ["people", "পিপল"], ["jobs", "চাকরি"], ["gallery", "গ্যালারি"],
                     ].map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                   <select className="border rounded-md p-1.5 bg-background text-sm" value={scrapeInterval} onChange={(e) => setScrapeInterval(e.target.value)}>
