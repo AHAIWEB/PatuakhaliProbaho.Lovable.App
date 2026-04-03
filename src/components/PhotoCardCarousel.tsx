@@ -93,8 +93,11 @@ const PhotoCardCarousel = () => {
             align: "start",
             loop: true,
             dragFree: true,
+            skipSnaps: false,
           }}
-          className="w-full"
+          className="w-full touch-pan-y"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
         >
           <CarouselContent className="-ml-3 sm:-ml-4">
             {cards.map((card, idx) => (
