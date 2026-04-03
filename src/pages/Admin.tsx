@@ -185,22 +185,36 @@ const Admin = () => {
   };
 
   const [backfillProgress, setBackfillProgress] = useState("");
+  const [backfillStats, setBackfillStats] = useState<{ updated: number; total: number; running: boolean }>({ updated: 0, total: 0, running: false });
 
   const handleBackfill = async () => {
     setLoading(true);
-    setBackfillProgress("ব্যাকফিল চলছে...");
+    setBackfillStats({ updated: 0, total: 0, running: true });
+    setBackfillProgress("ব্যাকফিল শুরু হচ্ছে...");
+    let totalUpdated = 0;
+    let totalChecked = 0;
     try {
-      const { data, error } = await supabase.functions.invoke("backfill-content");
-      if (error) throw error;
+      // Run multiple batches
+      for (let batch = 0; batch < 5; batch++) {
+        setBackfillProgress(`ব্যাচ ${batch + 1}/5 প্রসেসিং...`);
+        const { data, error } = await supabase.functions.invoke("backfill-content");
+        if (error) throw error;
+        totalUpdated += data?.updated || 0;
+        totalChecked += data?.total_checked || 0;
+        setBackfillStats({ updated: totalUpdated, total: totalChecked, running: true });
+        if ((data?.updated || 0) === 0) break; // No more to process
+      }
       setBackfillProgress("");
+      setBackfillStats({ updated: totalUpdated, total: totalChecked, running: false });
       toast({
         title: "সফল",
-        description: `${data?.updated || 0}টি পোস্ট আপডেট হয়েছে (${data?.total_checked || 0}টি চেক করা হয়েছে)`,
+        description: `${totalUpdated}টি পোস্ট আপডেট হয়েছে (${totalChecked}টি চেক করা হয়েছে)`,
       });
       fetchData();
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
       setBackfillProgress("");
+      setBackfillStats(prev => ({ ...prev, running: false }));
     }
     setLoading(false);
   };
