@@ -810,7 +810,19 @@ const Admin = () => {
                     <CardTitle className="text-sm sm:text-base">RSS ম্যানেজার ({feeds.length})</CardTitle>
                     <div className="flex items-center gap-2">
                       {fetchProgress && <span className="text-[10px] text-muted-foreground">{fetchProgress}</span>}
-                      {backfillProgress && <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>}
+                      {backfillProgress && (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] text-muted-foreground">{backfillProgress}</span>
+                          {backfillStats.running && (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-accent rounded-full transition-all duration-500" style={{ width: `${backfillStats.total > 0 ? Math.min((backfillStats.updated / Math.max(backfillStats.total, 1)) * 100, 100) : 10}%` }} />
+                              </div>
+                              <span className="text-[9px] text-accent font-medium">{backfillStats.updated}/{backfillStats.total}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <Button onClick={handleBackfill} disabled={loading} size="sm" variant="outline" className="h-8 text-xs">
                         <Database className={`w-3.5 h-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />ব্যাকফিল
                       </Button>

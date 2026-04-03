@@ -366,8 +366,8 @@ const Index = () => {
             )}
           </div>
 
-          {/* ========= RIGHT SIDEBAR - Pinterest Style ========= */}
-          <aside className="lg:col-span-3 order-3 space-y-4">
+          {/* ========= RIGHT SIDEBAR - Division Sections (mobile first) ========= */}
+          <aside className="lg:col-span-3 order-1 lg:order-3 space-y-4">
             {divisionSections.map((section) => {
               const count = sc(section.slug, 3);
               if (count <= 0 || !(section.posts ?? []).length) return null;
