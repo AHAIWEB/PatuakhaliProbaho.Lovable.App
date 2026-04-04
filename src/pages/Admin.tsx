@@ -568,6 +568,9 @@ const Admin = () => {
             <TabsTrigger value="site-settings" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
               <Image className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />সাইট
             </TabsTrigger>
+            <TabsTrigger value="theme" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              🎨 <span className="ml-0.5">থিম</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Quick Post Tab */}
