@@ -803,12 +803,17 @@ const PhotoCard = () => {
   };
 
   const drawQuoteTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
-    ctx.textAlign = "left"; ctx.fillText("❝", 40, 230);
+    const qm = quotationStyles.find(q => q.id === activeQuoteMark) || quotationStyles[0];
+    if (qm.open) {
+      ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+      ctx.textAlign = "left"; ctx.fillText(qm.open, 40, 230);
+    }
     drawSiteBranding(ctx, W, H);
     drawTitleAndQuote(ctx, W, H, 340, maxW());
-    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
-    ctx.textAlign = "right"; ctx.fillText("❞", W - 40, H - 120);
+    if (qm.close) {
+      ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+      ctx.textAlign = "right"; ctx.fillText(qm.close, W - 40, H - 120);
+    }
     drawPersonInfo(ctx, W, H, titleColor);
     drawFooter(ctx, W, H);
   };
