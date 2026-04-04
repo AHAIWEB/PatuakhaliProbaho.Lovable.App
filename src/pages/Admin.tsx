@@ -1124,6 +1124,10 @@ const Admin = () => {
           <TabsContent value="site-settings">
             <SiteSettingsTab />
           </TabsContent>
+          {/* Theme Customizer Tab */}
+          <TabsContent value="theme">
+            <ThemeCustomizerTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
