@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe, Layers, ArrowUp, ArrowDown } from "lucide-react";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe, Layers, ArrowUp, ArrowDown, Lock, Unlock } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
