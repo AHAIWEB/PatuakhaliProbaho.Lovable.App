@@ -1417,6 +1417,7 @@ const ThemeCustomizerTab = () => {
     </Card>
   );
 };
+const SiteSettingsTab = () => {
   const { data: logoUrl, isLoading: logoLoading } = useSiteSetting("site_logo");
   const { data: siteName } = useSiteSetting("site_name");
   const { data: faviconUrl } = useSiteSetting("site_favicon");
