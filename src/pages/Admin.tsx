@@ -527,7 +527,7 @@ const Admin = () => {
         </div>
         {/* Expanded mobile actions */}
         {showMobileActions && (
-          <div className="bg-card border-t border-border p-2 grid grid-cols-4 gap-2 animate-fade-in">
+          <div className="bg-card border-t border-border p-2 grid grid-cols-5 gap-2 animate-fade-in">
             <button onClick={() => { const el = document.querySelector('[data-value="scraper"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Globe className="w-4 h-4" />স্ক্র্যাপার
             </button>
@@ -539,6 +539,9 @@ const Admin = () => {
             </button>
             <button onClick={() => { const el = document.querySelector('[data-value="site-settings"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Image className="w-4 h-4" />সাইট
+            </button>
+            <button onClick={() => { const el = document.querySelector('[data-value="theme"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              🎨 থিম
             </button>
           </div>
         )}
