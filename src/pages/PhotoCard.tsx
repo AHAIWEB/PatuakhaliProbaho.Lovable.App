@@ -54,6 +54,15 @@ const builtInFrames = [
   { id: "mosaic", name: "মোজাইক" },
 ];
 
+const quotationStyles = [
+  { id: "bangla", name: "বাংলা ❝❞", open: "❝", close: "❞" },
+  { id: "guillemet", name: "ফ্রেঞ্চ «»", open: "«", close: "»" },
+  { id: "curly", name: "কার্লি """, open: "\u201C", close: "\u201D" },
+  { id: "angle", name: "এঙ্গেল ‹›", open: "‹", close: "›" },
+  { id: "dash", name: "ড্যাশ —", open: "—", close: "—" },
+  { id: "none", name: "কোনোটি নয়", open: "", close: "" },
+];
+
 const PhotoCard = () => {
   const { toast } = useToast();
   const { user } = useAuth();
