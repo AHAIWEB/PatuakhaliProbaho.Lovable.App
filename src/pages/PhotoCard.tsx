@@ -54,6 +54,15 @@ const builtInFrames = [
   { id: "mosaic", name: "মোজাইক" },
 ];
 
+const quotationStyles = [
+  { id: "bangla", name: "বাংলা ❝❞", open: "❝", close: "❞" },
+  { id: "guillemet", name: "ফ্রেঞ্চ «»", open: "«", close: "»" },
+  { id: "curly", name: "কার্লি", open: "\u201C", close: "\u201D" },
+  { id: "angle", name: "এঙ্গেল ‹›", open: "‹", close: "›" },
+  { id: "dash", name: "ড্যাশ —", open: "—", close: "—" },
+  { id: "none", name: "কোনোটি নয়", open: "", close: "" },
+];
+
 const PhotoCard = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -83,6 +92,7 @@ const PhotoCard = () => {
   const [logoOffsetX, setLogoOffsetX] = useState(85);
   const [logoOffsetY, setLogoOffsetY] = useState(5);
   const [activeFrame, setActiveFrame] = useState("none");
+  const [activeQuoteMark, setActiveQuoteMark] = useState("bangla");
   const [frameColor1, setFrameColor1] = useState("#e74c3c");
   const [frameColor2, setFrameColor2] = useState("#f39c12");
 
@@ -793,12 +803,17 @@ const PhotoCard = () => {
   };
 
   const drawQuoteTemplate = (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
-    ctx.textAlign = "left"; ctx.fillText("❝", 40, 230);
+    const qm = quotationStyles.find(q => q.id === activeQuoteMark) || quotationStyles[0];
+    if (qm.open) {
+      ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+      ctx.textAlign = "left"; ctx.fillText(qm.open, 40, 230);
+    }
     drawSiteBranding(ctx, W, H);
     drawTitleAndQuote(ctx, W, H, 340, maxW());
-    ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
-    ctx.textAlign = "right"; ctx.fillText("❞", W - 40, H - 120);
+    if (qm.close) {
+      ctx.fillStyle = "#f4c542"; ctx.font = "bold 200px serif";
+      ctx.textAlign = "right"; ctx.fillText(qm.close, W - 40, H - 120);
+    }
     drawPersonInfo(ctx, W, H, titleColor);
     drawFooter(ctx, W, H);
   };
@@ -1025,7 +1040,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
   // Auto-regenerate on drag end
   useEffect(() => {
     if (!dragRef.current?.active && preview) {
-      const timer = setTimeout(generateCard, 300);
+      const timer = setTimeout(generateCard, 100);
       return () => clearTimeout(timer);
     }
   }, [personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, logoOffsetX, logoOffsetY, logoSize]);
@@ -1256,6 +1271,20 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
             <Card>
               <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">✍️ টেক্সট কাস্টমাইজ</CardTitle></CardHeader>
               <CardContent className="p-3 pt-1 space-y-2">
+                {/* Quotation mark style */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">কোটেশন মার্ক স্টাইল</label>
+                  <div className="flex gap-1 flex-wrap">
+                    {quotationStyles.map((q) => (
+                      <button key={q.id} onClick={() => setActiveQuoteMark(q.id)}
+                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                          activeQuoteMark === q.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted border-border"
+                        }`}>
+                        {q.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <Input placeholder="শিরোনাম" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} className="h-9 text-sm" />
                 <Textarea placeholder="কোটেশন / বিস্তারিত (৮-১০ লাইন লিখুন)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={6} className="text-sm" />
                 <div className="grid grid-cols-2 gap-1.5">

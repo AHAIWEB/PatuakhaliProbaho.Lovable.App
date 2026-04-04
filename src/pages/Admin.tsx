@@ -527,7 +527,7 @@ const Admin = () => {
         </div>
         {/* Expanded mobile actions */}
         {showMobileActions && (
-          <div className="bg-card border-t border-border p-2 grid grid-cols-4 gap-2 animate-fade-in">
+          <div className="bg-card border-t border-border p-2 grid grid-cols-5 gap-2 animate-fade-in">
             <button onClick={() => { const el = document.querySelector('[data-value="scraper"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Globe className="w-4 h-4" />স্ক্র্যাপার
             </button>
@@ -539,6 +539,9 @@ const Admin = () => {
             </button>
             <button onClick={() => { const el = document.querySelector('[data-value="site-settings"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Image className="w-4 h-4" />সাইট
+            </button>
+            <button onClick={() => { const el = document.querySelector('[data-value="theme"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              🎨 থিম
             </button>
           </div>
         )}
@@ -567,6 +570,9 @@ const Admin = () => {
             </TabsTrigger>
             <TabsTrigger value="site-settings" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
               <Image className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />সাইট
+            </TabsTrigger>
+            <TabsTrigger value="theme" className="text-[10px] sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              🎨 <span className="ml-0.5">থিম</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1121,10 +1127,27 @@ const Admin = () => {
           <TabsContent value="site-settings">
             <SiteSettingsTab />
           </TabsContent>
+          {/* Theme Customizer Tab */}
+          <TabsContent value="theme">
+            <ThemeCustomizerTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
   );
+};
+
+// Section position map
+const sectionPositionMap: Record<string, string> = {
+  national: "বাম সাইডবার", international: "বাম সাইডবার", politics: "বাম সাইডবার", technology: "বাম সাইডবার",
+  highlighted: "মূল কন্টেন্ট", barisal: "মূল কন্টেন্ট", sports: "মূল কন্টেন্ট", 
+  entertainment: "মূল কন্টেন্ট", gallery: "মূল কন্টেন্ট", health: "মূল কন্টেন্ট",
+  lifestyle: "মূল কন্টেন্ট", religion: "মূল কন্টেন্ট", travel: "মূল কন্টেন্ট",
+  education: "মূল কন্টেন্ট", economy: "মূল কন্টেন্ট", crime: "মূল কন্টেন্ট",
+  people: "মূল কন্টেন্ট", jobs: "মূল কন্টেন্ট",
+  popular: "ডান সাইডবার", dhaka: "ডান সাইডবার", chattogram: "ডান সাইডবার",
+  sylhet: "ডান সাইডবার", rajshahi: "ডান সাইডবার", khulna: "ডান সাইডবার",
+  rangpur: "ডান সাইডবার", mymensingh: "ডান সাইডবার",
 };
 
 const LayoutSettingsTab = () => {
@@ -1135,6 +1158,9 @@ const LayoutSettingsTab = () => {
   const [newLabel, setNewLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+  const sortedSettings = [...(settings ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
   const addSection = async () => {
     if (!newKey || !newLabel) return;
@@ -1145,7 +1171,7 @@ const LayoutSettingsTab = () => {
     if (error) { toast({ title: "ত্রুটি", description: error.message, variant: "destructive" }); return; }
     toast({ title: "সেকশন যুক্ত হয়েছে" });
     setNewKey(""); setNewLabel("");
-    updateSetting.mutate({ id: "refresh" } as any); // trigger refresh
+    updateSetting.mutate({ id: "refresh" } as any);
   };
 
   const deleteSection = async (id: string) => {
@@ -1162,6 +1188,19 @@ const LayoutSettingsTab = () => {
     updateSetting.mutate({ id: "refresh" } as any);
   };
 
+  const handleDrop = async (dropIdx: number) => {
+    if (dragIdx === null || dragIdx === dropIdx) { setDragIdx(null); return; }
+    const items = [...sortedSettings];
+    const [moved] = items.splice(dragIdx, 1);
+    items.splice(dropIdx, 0, moved);
+    await Promise.all(items.map((item, i) => 
+      supabase.from("layout_settings").update({ sort_order: i + 1 }).eq("id", item.id)
+    ));
+    setDragIdx(null);
+    toast({ title: "ক্রম পরিবর্তন হয়েছে" });
+    updateSetting.mutate({ id: "refresh" } as any);
+  };
+
   if (isLoading) return <div className="p-4 text-center text-sm text-muted-foreground">লোড হচ্ছে...</div>;
 
   return (
@@ -1170,9 +1209,16 @@ const LayoutSettingsTab = () => {
         <CardTitle className="text-sm sm:text-base flex items-center gap-2">
           <Settings2 className="w-4 h-4" /> হোমপেজ লেআউট সেটিংস
         </CardTitle>
-        <p className="text-xs text-muted-foreground">সেকশন যুক্ত/এডিট/মুছুন এবং পোস্ট সংখ্যা নিয়ন্ত্রণ করুন</p>
+        <p className="text-xs text-muted-foreground">☝️ ড্র্যাগ করে ক্রম পরিবর্তন করুন। রঙিন ব্যাজ দেখায় কোন সেকশন পেজের কোথায় আছে।</p>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0 space-y-3">
+        {/* Position legend */}
+        <div className="flex flex-wrap gap-2 text-[10px] bg-muted/50 rounded p-2">
+          <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">◀ বাম সাইডবার</span>
+          <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded">▣ মূল কন্টেন্ট (মাঝে)</span>
+          <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded">▶ ডান সাইডবার</span>
+        </div>
+
         {/* Add new section */}
         <div className="flex gap-1.5 flex-wrap border-b pb-3 border-border">
           <Input placeholder="সেকশন key (e.g. sports)" value={newKey} onChange={(e) => setNewKey(e.target.value)} className="flex-1 min-w-[100px] h-8 text-xs" />
@@ -1180,55 +1226,200 @@ const LayoutSettingsTab = () => {
           <Button onClick={addSection} size="sm" className="h-8 text-xs"><Plus className="w-3 h-3 mr-1" />যুক্ত</Button>
         </div>
 
-        {(settings ?? []).map((s) => (
-          <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
-            <button
-              onClick={() => {
-                updateSetting.mutate({ id: s.id, is_visible: !s.is_visible });
-                toast({ title: s.is_visible ? "হাইড করা হয়েছে" : "দেখানো হচ্ছে" });
-              }}
-              className="shrink-0"
+        {sortedSettings.map((s, idx) => {
+          const pos = sectionPositionMap[s.section_key] || "কাস্টম";
+          const posBg = pos.includes("বাম") ? "border-l-4 border-l-blue-400" 
+            : pos.includes("মূল") ? "border-l-4 border-l-green-400"
+            : "border-l-4 border-l-orange-400";
+          return (
+            <div
+              key={s.id}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(idx)}
+              className={`flex items-center gap-2 p-2 rounded-lg border bg-card ${posBg} ${dragIdx === idx ? "opacity-50 scale-95" : ""} transition-all`}
             >
-              {s.is_visible ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
-            </button>
-            {editingId === s.id ? (
-              <div className="flex-1 flex gap-1">
-                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="h-7 text-xs flex-1" />
-                <Button size="sm" className="h-7 text-xs" onClick={() => saveLabel(s.id)}><Save className="w-3 h-3" /></Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingId(null)}><X className="w-3 h-3" /></Button>
+              <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
+              <button onClick={() => { updateSetting.mutate({ id: s.id, is_visible: !s.is_visible }); }} className="shrink-0">
+                {s.is_visible ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                {editingId === s.id ? (
+                  <div className="flex gap-1">
+                    <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="h-7 text-xs flex-1" />
+                    <Button size="sm" className="h-7 text-xs" onClick={() => saveLabel(s.id)}><Save className="w-3 h-3" /></Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingId(null)}><X className="w-3 h-3" /></Button>
+                  </div>
+                ) : (
+                  <div onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }} className="cursor-pointer">
+                    <span className={`text-xs sm:text-sm font-medium ${!s.is_visible ? "opacity-50 line-through" : ""}`}>
+                      {s.section_label}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1 rounded">{s.section_key}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                        pos.includes("বাম") ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600" 
+                        : pos.includes("মূল") ? "bg-green-100 dark:bg-green-900/30 text-green-600"
+                        : "bg-orange-100 dark:bg-orange-900/30 text-orange-600"
+                      }`}>{pos}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <span className={`text-xs sm:text-sm flex-1 font-medium ${!s.is_visible ? "opacity-50" : ""}`}
-                onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }}
-                title="ক্লিক করে এডিট করুন">
-                {s.section_label} <span className="text-[9px] text-muted-foreground">({s.section_key})</span>
-              </span>
-            )}
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" className="h-7 w-7"
-                disabled={s.post_count <= 1}
-                onClick={() => updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) })}>
-                <Minus className="w-3 h-3" />
-              </Button>
-              <span className="w-7 text-center text-sm font-bold">{s.post_count}</span>
-              <Button size="icon" variant="outline" className="h-7 w-7"
-                onClick={() => updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 })}>
-                <Plus className="w-3 h-3" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }}>
-                <Edit className="w-3 h-3" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteSection(s.id)}>
-                <Trash2 className="w-3 h-3" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="icon" variant="outline" className="h-7 w-7" disabled={s.post_count <= 1}
+                  onClick={() => updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) })}>
+                  <Minus className="w-3 h-3" />
+                </Button>
+                <span className="w-7 text-center text-sm font-bold">{s.post_count}</span>
+                <Button size="icon" variant="outline" className="h-7 w-7"
+                  onClick={() => updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 })}>
+                  <Plus className="w-3 h-3" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteSection(s.id)}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
 };
 
+// Theme Customizer Tab
+const ThemeCustomizerTab = () => {
+  const { toast } = useToast();
+  const updateSetting = useUpdateSiteSetting();
+  
+  const { data: primaryColor } = useSiteSetting("theme_primary");
+  const { data: accentColor } = useSiteSetting("theme_accent");
+  const { data: bgColor } = useSiteSetting("theme_background");
+  const { data: headerBg } = useSiteSetting("theme_header_bg");
+  const { data: topbarBg } = useSiteSetting("theme_topbar_bg");
+  const { data: footerBg } = useSiteSetting("theme_footer_bg");
+  const { data: fontFamily } = useSiteSetting("theme_font");
+
+  const [colors, setColors] = useState({
+    primary: "#1e3a5f", accent: "#c0392b", background: "#faf8f5",
+    headerBg: "#1a2d47", topbarBg: "#c0392b", footerBg: "#1a2d47",
+  });
+  const [font, setFont] = useState("Hind Siliguri");
+
+  useEffect(() => {
+    if (primaryColor) setColors(c => ({ ...c, primary: primaryColor }));
+    if (accentColor) setColors(c => ({ ...c, accent: accentColor }));
+    if (bgColor) setColors(c => ({ ...c, background: bgColor }));
+    if (headerBg) setColors(c => ({ ...c, headerBg }));
+    if (topbarBg) setColors(c => ({ ...c, topbarBg }));
+    if (footerBg) setColors(c => ({ ...c, footerBg }));
+    if (fontFamily) setFont(fontFamily);
+  }, [primaryColor, accentColor, bgColor, headerBg, topbarBg, footerBg, fontFamily]);
+
+  const saveTheme = async () => {
+    const entries = [
+      { key: "theme_primary", value: colors.primary },
+      { key: "theme_accent", value: colors.accent },
+      { key: "theme_background", value: colors.background },
+      { key: "theme_header_bg", value: colors.headerBg },
+      { key: "theme_topbar_bg", value: colors.topbarBg },
+      { key: "theme_footer_bg", value: colors.footerBg },
+      { key: "theme_font", value: font },
+    ];
+    for (const { key, value } of entries) {
+      await updateSetting.mutateAsync({ key, value });
+    }
+    toast({ title: "✅ থিম সেভ হয়েছে! পেজ রিলোড করুন।" });
+  };
+
+  const presets = [
+    { name: "ডিফল্ট (নীল-লাল)", primary: "#1e3a5f", accent: "#c0392b", bg: "#faf8f5", header: "#1a2d47", topbar: "#c0392b", footer: "#1a2d47" },
+    { name: "ডার্ক মোড", primary: "#3b82f6", accent: "#ef4444", bg: "#1a1a2e", header: "#0f0f23", topbar: "#ef4444", footer: "#0f0f23" },
+    { name: "গ্রিন থিম", primary: "#166534", accent: "#15803d", bg: "#f0fdf4", header: "#14532d", topbar: "#166534", footer: "#14532d" },
+    { name: "পার্পল এলিগ্যান্ট", primary: "#581c87", accent: "#9333ea", bg: "#faf5ff", header: "#3b0764", topbar: "#7c3aed", footer: "#3b0764" },
+  ];
+
+  const fontOptions = ["Hind Siliguri", "Noto Sans Bengali", "Kalpurush", "SolaimanLipi", "Bangla MN"];
+
+  return (
+    <Card>
+      <CardHeader className="p-3 sm:p-6">
+        <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+          🎨 থিম কাস্টমাইজার
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">সাইটের রং, ফন্ট সবকিছু পরিবর্তন করুন</p>
+      </CardHeader>
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
+        {/* Presets */}
+        <div>
+          <p className="text-xs font-medium mb-2">🎭 প্রিসেট থিম</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {presets.map((p) => (
+              <button key={p.name} onClick={() => setColors({ primary: p.primary, accent: p.accent, background: p.bg, headerBg: p.header, topbarBg: p.topbar, footerBg: p.footer })}
+                className="text-[11px] p-2 rounded border hover:bg-muted transition-colors text-left">
+                <div className="flex gap-1 mb-1">
+                  <span className="w-4 h-4 rounded-full border" style={{ background: p.primary }} />
+                  <span className="w-4 h-4 rounded-full border" style={{ background: p.accent }} />
+                  <span className="w-4 h-4 rounded-full border" style={{ background: p.bg }} />
+                </div>
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Color pickers */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            { label: "প্রাইমারি", key: "primary" as const },
+            { label: "অ্যাক্সেন্ট", key: "accent" as const },
+            { label: "ব্যাকগ্রাউন্ড", key: "background" as const },
+            { label: "হেডার BG", key: "headerBg" as const },
+            { label: "টপবার BG", key: "topbarBg" as const },
+            { label: "ফুটার BG", key: "footerBg" as const },
+          ].map(({ label, key }) => (
+            <div key={key} className="space-y-1">
+              <label className="text-[11px] font-medium">{label}</label>
+              <div className="flex items-center gap-1.5">
+                <input type="color" value={colors[key]} onChange={(e) => setColors({ ...colors, [key]: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0" />
+                <Input value={colors[key]} onChange={(e) => setColors({ ...colors, [key]: e.target.value })}
+                  className="h-7 text-[10px] font-mono flex-1" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Font */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium">ফন্ট ফ্যামিলি</label>
+          <select className="w-full border rounded-md p-2 bg-background text-sm h-9" value={font} onChange={(e) => setFont(e.target.value)}>
+            {fontOptions.map((f) => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
+          </select>
+        </div>
+
+        {/* Preview */}
+        <div className="rounded-lg overflow-hidden border">
+          <div className="p-1.5 text-[10px] text-center" style={{ background: colors.topbarBg, color: "#fff" }}>টপবার প্রিভিউ</div>
+          <div className="p-2 text-center" style={{ background: colors.headerBg, color: "#fff", fontFamily: font }}>
+            <span className="text-sm font-bold">হেডার প্রিভিউ</span>
+          </div>
+          <div className="p-3 text-center" style={{ background: colors.background, color: colors.primary, fontFamily: font }}>
+            <span className="text-sm font-bold" style={{ color: colors.primary }}>প্রাইমারি টেক্সট</span>
+            <span className="text-xs ml-2 px-2 py-0.5 rounded" style={{ background: colors.accent, color: "#fff" }}>অ্যাক্সেন্ট</span>
+          </div>
+          <div className="p-1.5 text-[10px] text-center" style={{ background: colors.footerBg, color: "#fff" }}>ফুটার প্রিভিউ</div>
+        </div>
+
+        <Button onClick={saveTheme} className="w-full">
+          <Save className="w-4 h-4 mr-1" />থিম সেভ করুন
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
 const SiteSettingsTab = () => {
   const { data: logoUrl, isLoading: logoLoading } = useSiteSetting("site_logo");
   const { data: siteName } = useSiteSetting("site_name");
