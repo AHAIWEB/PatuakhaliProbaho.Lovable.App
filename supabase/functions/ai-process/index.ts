@@ -18,8 +18,15 @@ Deno.serve(async (req) => {
         try {
           const aiResult = await callAI(
             LOVABLE_API_KEY,
-            `তুমি একজন বাংলা নিউজ এডিটর। নিচের টেক্সট থেকে সর্বোচ্চ ৫টি কোটেশন বের করো। প্রতিটি কোটেশন কমপক্ষে ৮-১০ লাইন (২০০-৫০০ অক্ষর) দীর্ঘ হবে এবং সংবাদের মূল বিষয়বস্তু, বিশ্লেষণ, এবং প্রেক্ষাপট অন্তর্ভুক্ত করবে। শুধু JSON ফরম্যাটে উত্তর দাও: {"quotes": ["...", "..."]}`,
-            text
+            `তুমি একজন বাংলা নিউজ এডিটর ও কোটেশন বিশেষজ্ঞ। নিচের সম্পূর্ণ আর্টিকেল থেকে ৩টি আলাদা ধরনের smart quote তৈরি করো:
+
+1. **মূল সংবাদ কোটেশন**: সংবাদের সবচেয়ে গুরুত্বপূর্ণ তথ্য নিয়ে ৩-৫ লাইনের একটি সারাংশমূলক কোটেশন।
+2. **বিশ্লেষণমূলক কোটেশন**: সংবাদের প্রভাব, তাৎপর্য বা পটভূমি নিয়ে ২-৪ লাইনের একটি গভীর কোটেশন।  
+3. **শিরোনাম কোটেশন**: সোশ্যাল মিডিয়ায় শেয়ারযোগ্য ১-২ লাইনের একটি আকর্ষণীয় কোটেশন।
+
+প্রতিটি কোটেশন বাংলায় লিখো, স্বাভাবিক ভাষায়, উদ্ধৃতি চিহ্ন ছাড়া।
+শুধু JSON ফরম্যাটে উত্তর দাও: {"quotes": ["...", "...", "..."]}`,
+            text.substring(0, 3000)
           );
           const parsed = JSON.parse(aiResult);
           if (parsed.quotes?.length) {
@@ -28,26 +35,30 @@ Deno.serve(async (req) => {
         } catch { /* fallback below */ }
       }
 
-      // Fallback: local extraction
+      // Fallback: smarter local extraction
       const input = (text || "").trim();
       const quotes: string[] = [];
       if (input) {
         const sentences = input
           .split(/[।\.\!\?\n]+/)
           .map((s: string) => s.trim())
-          .filter((s: string) => s.length > 5);
-        if (sentences.length >= 4) {
-          // Combine sentences for longer quotes (8-10 lines)
-          quotes.push(`"${sentences.slice(0, Math.min(8, sentences.length)).join("। ")}।"`);
-          if (sentences.length >= 6) {
-            quotes.push(`"${sentences.slice(0, Math.min(5, sentences.length)).join("। ")}।"`);
-          }
+          .filter((s: string) => s.length > 15);
+        
+        // Quote 1: Key summary (first few meaningful sentences)
+        if (sentences.length >= 2) {
+          quotes.push(sentences.slice(0, Math.min(4, sentences.length)).join("। ") + "।");
         }
-        for (let i = 0; i < Math.min(3, sentences.length); i++) {
-          quotes.push(`"${sentences[i]}"`);
+        // Quote 2: Middle section insight
+        if (sentences.length >= 5) {
+          const mid = Math.floor(sentences.length / 2);
+          quotes.push(sentences.slice(mid, mid + 3).join("। ") + "।");
+        }
+        // Quote 3: Short headline-worthy
+        if (sentences.length >= 1) {
+          quotes.push(sentences[0] + "।");
         }
         if (quotes.length === 0) {
-          quotes.push(`"${input.substring(0, 500)}"`);
+          quotes.push(input.substring(0, 300));
         }
       }
       return jsonResponse({ quotes });

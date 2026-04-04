@@ -169,7 +169,9 @@ const PhotoCard = () => {
     setFetchedImage(post.image_url || "");
     setCustomQuote("");
     setQrUrl(post.source_url || "");
-    if (post.title) handleAiQuotes(post.title);
+    // Send full content for smarter AI quotes
+    const fullText = [post.title, post.content, post.excerpt].filter(Boolean).join("\n\n");
+    if (fullText) handleAiQuotes(fullText);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
