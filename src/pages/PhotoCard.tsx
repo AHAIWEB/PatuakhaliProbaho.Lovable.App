@@ -97,7 +97,16 @@ const PhotoCard = () => {
   const [titleOffsetY, setTitleOffsetY] = useState(35);
   const [quoteOffsetX, setQuoteOffsetX] = useState(50);
   const [quoteOffsetY, setQuoteOffsetY] = useState(55);
-  const [dragTarget, setDragTarget] = useState<"person" | "title" | "quote" | null>(null);
+  const [dragTarget, setDragTarget] = useState<"person" | "title" | "quote" | "logo" | null>(null);
+  // Lock system: locked elements cannot be dragged
+  const [lockedElements, setLockedElements] = useState<Set<string>>(new Set());
+  const toggleLock = (el: string) => setLockedElements(prev => {
+    const next = new Set(prev);
+    next.has(el) ? next.delete(el) : next.add(el);
+    return next;
+  });
+  // Active drag mode selector for mobile
+  const [activeDragMode, setActiveDragMode] = useState<"title" | "quote" | "person" | "logo">("title");
 
   const bgInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
