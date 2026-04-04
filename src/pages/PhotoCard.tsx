@@ -1264,7 +1264,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 {posts.map((post) => (
                   <button key={post.id} onClick={() => selectPost(post)}
                     className={`w-full text-left p-1.5 rounded text-[11px] border transition-colors ${selectedPost?.id === post.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}>
-                    {post.title}
+                    {cleanText(post.title)}
                   </button>
                 ))}
               </CardContent>
