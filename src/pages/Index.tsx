@@ -228,6 +228,9 @@ const Index = () => {
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
   const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
   const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
+  const { data: educationPosts } = useCategoryPosts("education", sc("education", 4), ["শিক্ষা"]);
+  const { data: economyPosts } = useCategoryPosts("economy", sc("economy", 4), ["অর্থনীতি", "business"]);
+  const { data: crimePosts } = useCategoryPosts("crime", sc("crime", 4), ["অপরাধ"]);
   const { data: galleryPosts } = useQuery({
     queryKey: ["posts", "galleryPreview"],
     queryFn: async () => {
@@ -407,6 +410,27 @@ const Index = () => {
               <div className="mt-4">
                 <SectionTitle title="পিপল" />
                 <MasonryGrid posts={(peoplePosts ?? []).slice(0, sc("people", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("education") > 0 && (educationPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="শিক্ষা" />
+                <MasonryGrid posts={(educationPosts ?? []).slice(0, sc("education", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("economy") > 0 && (economyPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="অর্থনীতি" />
+                <MasonryGrid posts={(economyPosts ?? []).slice(0, sc("economy", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("crime") > 0 && (crimePosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="অপরাধ" />
+                <MasonryGrid posts={(crimePosts ?? []).slice(0, sc("crime", 4))} columns={2} />
               </div>
             )}
 
