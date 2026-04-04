@@ -228,6 +228,19 @@ const Index = () => {
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
   const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
   const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
+  const { data: galleryPosts } = useQuery({
+    queryKey: ["posts", "galleryPreview"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, title, image_url, slug")
+        .eq("status", "published")
+        .not("image_url", "is", null)
+        .order("published_at", { ascending: false })
+        .limit(6);
+      return data || [];
+    },
+  });
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
