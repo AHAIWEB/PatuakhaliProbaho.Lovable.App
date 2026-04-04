@@ -83,6 +83,44 @@ function isValidArticleUrl(url: string, baseUrl: string): boolean {
       if (p.test(path)) return false;
     }
     if (path.replace(/\//g, "").length < 5) return false;
+
+    // Source-specific rules to filter generic category/section pages
+    const host = u.hostname.replace(/^www\./, "");
+
+    // NTV: reject division/category landing pages like /entertainment, /bangladesh etc
+    if (host === "ntvbd.com") {
+      if (/^\/(entertainment|sports|international|bangladesh|opinion|lifestyle|education|technology|feature|economy|country|video|photo)\/?$/i.test(path)) return false;
+    }
+
+    // RisingBD: reject division landing pages
+    if (host === "risingbd.com") {
+      if (/^\/(divisions|entertainment|national|politics|international|sports|economy|education|lifestyle|religion|crime|feature|opinion|technology)\/?$/i.test(path)) return false;
+      if (/^\/divisions\/(chattogram|barishal|khulna|dhaka|sylhet|rajshahi|rangpur|mymensingh)\/?$/i.test(path)) return false;
+    }
+
+    // Naya Diganta: reject category landing pages
+    if (host === "dailynayadiganta.com") {
+      if (/^\/(entertainment|national|politics|international|sports|economy|education|lifestyle|religion|crime|editorial|opinion)\/?$/i.test(path)) return false;
+    }
+
+    // Jagonews24: reject division/category landing pages
+    if (host === "jagonews24.com") {
+      if (/^\/(entertainment|top-ten|bangladesh|sports|international|economy|education|technology|lifestyle|opinion)\/?$/i.test(path)) return false;
+      if (/^\/bangladesh\/(chittagong|barisal|khulna|dhaka|sylhet|rajshahi|rangpur|mymensingh)\/?$/i.test(path)) return false;
+    }
+
+    // DainikAmaderShomoy: reject category landing pages
+    if (host === "dainikamadershomoy.com") {
+      if (/^\/category\/all\/(dhaka|cttgram-1|rajsahee|khulna|silet|brisal|rngpur|mzmnsingh|entertainment)\/?$/i.test(path)) return false;
+    }
+
+    // Generic: reject paths that look like section landing pages (single segment, no numbers/hyphens)
+    if (/^\/[a-z-]+\/?$/i.test(path) && !/\d/.test(path) && path.split("/").filter(Boolean).length === 1) {
+      const segment = path.replace(/\//g, "");
+      const genericSections = ["entertainment", "sports", "international", "national", "politics", "economy", "education", "lifestyle", "health", "religion", "technology", "opinion", "feature", "video", "photo", "gallery", "travel", "crime"];
+      if (genericSections.includes(segment)) return false;
+    }
+
     return true;
   } catch { return false; }
 }
