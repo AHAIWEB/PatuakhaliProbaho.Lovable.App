@@ -1271,6 +1271,20 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
             <Card>
               <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">✍️ টেক্সট কাস্টমাইজ</CardTitle></CardHeader>
               <CardContent className="p-3 pt-1 space-y-2">
+                {/* Quotation mark style */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">কোটেশন মার্ক স্টাইল</label>
+                  <div className="flex gap-1 flex-wrap">
+                    {quotationStyles.map((q) => (
+                      <button key={q.id} onClick={() => setActiveQuoteMark(q.id)}
+                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                          activeQuoteMark === q.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted border-border"
+                        }`}>
+                        {q.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <Input placeholder="শিরোনাম" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} className="h-9 text-sm" />
                 <Textarea placeholder="কোটেশন / বিস্তারিত (৮-১০ লাইন লিখুন)" value={customQuote} onChange={(e) => setCustomQuote(e.target.value)} rows={6} className="text-sm" />
                 <div className="grid grid-cols-2 gap-1.5">
