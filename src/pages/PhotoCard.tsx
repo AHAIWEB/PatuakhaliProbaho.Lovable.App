@@ -1040,7 +1040,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
   // Auto-regenerate on drag end
   useEffect(() => {
     if (!dragRef.current?.active && preview) {
-      const timer = setTimeout(generateCard, 300);
+      const timer = setTimeout(generateCard, 100);
       return () => clearTimeout(timer);
     }
   }, [personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, logoOffsetX, logoOffsetY, logoSize]);
