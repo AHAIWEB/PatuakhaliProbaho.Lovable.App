@@ -413,6 +413,27 @@ const Index = () => {
               </div>
             )}
 
+            {sc("education") > 0 && (educationPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="শিক্ষা" />
+                <MasonryGrid posts={(educationPosts ?? []).slice(0, sc("education", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("economy") > 0 && (economyPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="অর্থনীতি" />
+                <MasonryGrid posts={(economyPosts ?? []).slice(0, sc("economy", 4))} columns={2} />
+              </div>
+            )}
+
+            {sc("crime") > 0 && (crimePosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <SectionTitle title="অপরাধ" />
+                <MasonryGrid posts={(crimePosts ?? []).slice(0, sc("crime", 4))} columns={2} />
+              </div>
+            )}
+
             {sc("jobs") > 0 && (jobsPosts ?? []).length > 0 && (
               <div className="mt-4">
                 <SectionTitle title="চাকরি" />
