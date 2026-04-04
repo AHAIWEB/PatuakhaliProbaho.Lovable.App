@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe, Layers, ArrowUp, ArrowDown } from "lucide-react";
+import { Download, Share2, Eye, Link2, Upload, ImagePlus, X, QrCode, Type, Sparkles, Send, Globe, Layers, ArrowUp, ArrowDown, Lock, Unlock } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
@@ -97,7 +97,16 @@ const PhotoCard = () => {
   const [titleOffsetY, setTitleOffsetY] = useState(35);
   const [quoteOffsetX, setQuoteOffsetX] = useState(50);
   const [quoteOffsetY, setQuoteOffsetY] = useState(55);
-  const [dragTarget, setDragTarget] = useState<"person" | "title" | "quote" | null>(null);
+  const [dragTarget, setDragTarget] = useState<"person" | "title" | "quote" | "logo" | null>(null);
+  // Lock system: locked elements cannot be dragged
+  const [lockedElements, setLockedElements] = useState<Set<string>>(new Set());
+  const toggleLock = (el: string) => setLockedElements(prev => {
+    const next = new Set(prev);
+    next.has(el) ? next.delete(el) : next.add(el);
+    return next;
+  });
+  // Active drag mode selector for mobile
+  const [activeDragMode, setActiveDragMode] = useState<"title" | "quote" | "person" | "logo">("title");
 
   const bgInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
@@ -891,29 +900,27 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
     const container = previewContainerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Determine which element is closest to the touch point
-    const titleDist = Math.hypot(xPct - titleOffsetX, yPct - titleOffsetY);
-    const quoteDist = customQuote ? Math.hypot(xPct - quoteOffsetX, yPct - quoteOffsetY) : Infinity;
-    const personDist = uploadedPersonImage ? Math.hypot(xPct - personOffsetX, yPct - personOffsetY) : Infinity;
+    // Use the active drag mode selector instead of proximity
+    let target = activeDragMode;
+    
+    // Skip if locked
+    if (lockedElements.has(target)) return;
+    
+    // Skip if element doesn't exist
+    if (target === "person" && !uploadedPersonImage) target = "title";
+    if (target === "quote" && !customQuote) target = "title";
+    if (target === "logo" && !uploadedLogo) target = "title";
+    if (lockedElements.has(target)) return;
 
-    let target = "title";
     let startOx = titleOffsetX, startOy = titleOffsetY;
-    const minDist = Math.min(titleDist, quoteDist, personDist);
-
-    if (minDist === personDist && personDist < 30) {
-      target = "person"; startOx = personOffsetX; startOy = personOffsetY;
-    } else if (minDist === quoteDist && quoteDist < 30) {
-      target = "quote"; startOx = quoteOffsetX; startOy = quoteOffsetY;
-    } else {
-      target = "title"; startOx = titleOffsetX; startOy = titleOffsetY;
-    }
+    if (target === "person") { startOx = personOffsetX; startOy = personOffsetY; }
+    else if (target === "quote") { startOx = quoteOffsetX; startOy = quoteOffsetY; }
+    else if (target === "logo") { startOx = logoOffsetX; startOy = logoOffsetY; }
 
     setDragTarget(target as any);
     dragRef.current = { startX: e.clientX, startY: e.clientY, startOx, startOy, active: true, target };
-  }, [uploadedPersonImage, personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, customQuote]);
+  }, [activeDragMode, lockedElements, uploadedPersonImage, uploadedLogo, personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, logoOffsetX, logoOffsetY, customQuote]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current?.active) return;
@@ -930,6 +937,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
       case "person": setPersonOffsetX(nx); setPersonOffsetY(ny); break;
       case "title": setTitleOffsetX(nx); setTitleOffsetY(ny); break;
       case "quote": setQuoteOffsetX(nx); setQuoteOffsetY(ny); break;
+      case "logo": setLogoOffsetX(nx); setLogoOffsetY(ny); break;
     }
   }, []);
 
@@ -1216,37 +1224,35 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 </div>
                 {showQr && <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="h-8 text-xs" />}
 
-                {/* Manual position controls for title & quote */}
-                <div className="space-y-1.5 bg-muted/50 rounded p-2">
-                  <span className="text-[11px] font-medium">📍 টেক্সট পজিশন কন্ট্রোল</span>
-                  <div className="grid grid-cols-2 gap-2">
+                {/* Compact position controls - hidden behind details on mobile */}
+                <details className="bg-muted/50 rounded">
+                  <summary className="text-[11px] font-medium p-2 cursor-pointer">📍 পজিশন স্লাইডার (ড্র্যাগের বিকল্প)</summary>
+                  <div className="grid grid-cols-2 gap-2 px-2 pb-2">
                     <div>
-                      <label className="text-[10px] text-muted-foreground">শিরোনাম X: {titleOffsetX}%</label>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম X</label>
                       <Slider value={[titleOffsetX]} onValueChange={([v]) => setTitleOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground">শিরোনাম Y: {titleOffsetY}%</label>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম Y</label>
                       <Slider value={[titleOffsetY]} onValueChange={([v]) => setTitleOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
                     </div>
                     {customQuote && (
                       <>
                         <div>
-                          <label className="text-[10px] text-muted-foreground">কোটেশন X: {quoteOffsetX}%</label>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন X</label>
                           <Slider value={[quoteOffsetX]} onValueChange={([v]) => setQuoteOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
                         </div>
                         <div>
-                          <label className="text-[10px] text-muted-foreground">কোটেশন Y: {quoteOffsetY}%</label>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন Y</label>
                           <Slider value={[quoteOffsetY]} onValueChange={([v]) => setQuoteOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
                         </div>
                       </>
                     )}
                   </div>
-                </div>
+                </details>
 
-                <p className="text-[10px] text-muted-foreground">👆 প্রিভিউতে টাচ/ড্র্যাগ করে অথবা উপরের স্লাইডার দিয়ে পজিশন ঠিক করুন</p>
-
-                <Button onClick={generateCard} className="w-full h-10">
-                  <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
+                <Button onClick={generateCard} className="w-full h-9">
+                  <Eye className="w-4 h-4 mr-1" />প্রিভিউ তৈরি করুন
                 </Button>
               </CardContent>
             </Card>
@@ -1273,6 +1279,34 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 <canvas ref={canvasRef} className="hidden" />
                 {preview ? (
                   <div className="space-y-2">
+                    {/* Drag mode selector + lock controls */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground mr-1">ড্র্যাগ:</span>
+                      {(["title", "quote", "person", "logo"] as const).map(mode => {
+                        const labels = { title: "শিরোনাম", quote: "কোটেশন", person: "ছবি", logo: "লোগো" };
+                        const colors = { title: "yellow", quote: "green", person: "blue", logo: "purple" };
+                        const isLocked = lockedElements.has(mode);
+                        const isActive = activeDragMode === mode;
+                        const disabled = (mode === "person" && !uploadedPersonImage) || (mode === "quote" && !customQuote) || (mode === "logo" && !uploadedLogo);
+                        if (disabled) return null;
+                        return (
+                          <div key={mode} className="flex items-center">
+                            <button onClick={() => setActiveDragMode(mode)}
+                              className={`text-[10px] px-2 py-0.5 rounded-l border transition-colors ${
+                                isActive ? `bg-${colors[mode]}-500/20 border-${colors[mode]}-500 text-${colors[mode]}-700 dark:text-${colors[mode]}-300 font-semibold` : "bg-card border-border hover:bg-muted"
+                              } ${isLocked ? "opacity-50" : ""}`}>
+                              {labels[mode]}
+                            </button>
+                            <button onClick={() => toggleLock(mode)} title={isLocked ? "আনলক" : "লক"}
+                              className={`text-[10px] px-1 py-0.5 rounded-r border-y border-r transition-colors ${
+                                isLocked ? "bg-destructive/20 border-destructive/50 text-destructive" : "bg-card border-border hover:bg-muted text-muted-foreground"
+                              }`}>
+                              {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                     <div
                       ref={previewContainerRef}
                       onPointerDown={handlePointerDown}
@@ -1281,32 +1315,31 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       className="relative touch-none select-none cursor-grab active:cursor-grabbing"
                     >
                       <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
-                      {/* Selection indicators */}
                       {dragTarget && (
                         <div className="absolute inset-0 pointer-events-none">
                           <div className={`absolute w-5 h-5 rounded-full border-2 border-dashed animate-pulse ${
-                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : "border-yellow-400 bg-yellow-400/30"
+                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : dragTarget === "logo" ? "border-purple-400 bg-purple-400/30" : "border-yellow-400 bg-yellow-400/30"
                           }`} style={{
-                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : titleOffsetX)}%`,
-                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : titleOffsetY)}%`,
+                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : dragTarget === "logo" ? logoOffsetX : titleOffsetX)}%`,
+                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : dragTarget === "logo" ? logoOffsetY : titleOffsetY)}%`,
                             transform: "translate(-50%, -50%)",
                           }} />
                         </div>
                       )}
-                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[10px] px-2.5 py-1 rounded-full transition-colors ${
-                        dragTarget ? (dragTarget === "person" ? "bg-blue-600/80" : dragTarget === "quote" ? "bg-green-600/80" : "bg-yellow-600/80") : "bg-black/60"
+                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[9px] px-2 py-0.5 rounded-full transition-colors ${
+                        dragTarget ? "bg-primary/80" : "bg-black/50"
                       }`}>
-                        {dragTarget ? `✋ ${dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরাচ্ছেন` : "👆 ট্যাপ করে ড্র্যাগ করুন"}
+                        {dragTarget ? `✋ সরাচ্ছেন` : `👆 ${({title:"শিরোনাম",quote:"কোটেশন",person:"ছবি",logo:"লোগো"})[activeDragMode]} ড্র্যাগ করুন`}
                       </div>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Button onClick={downloadCard} className="flex-1 h-9" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
-                      <Button onClick={shareCard} variant="outline" className="flex-1 h-9" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
-                      <Button onClick={postToSite} disabled={postingToSite} variant="secondary" className="flex-1 h-9" size="sm">
-                        <Send className="w-4 h-4 mr-1" />{postingToSite ? "পোস্ট হচ্ছে..." : "সাইটে পোস্ট"}
+                    <div className="grid grid-cols-4 gap-1">
+                      <Button onClick={downloadCard} className="h-8 text-[10px] px-1" size="sm"><Download className="w-3 h-3 mr-0.5" />ডাউনলোড</Button>
+                      <Button onClick={shareCard} variant="outline" className="h-8 text-[10px] px-1" size="sm"><Share2 className="w-3 h-3 mr-0.5" />শেয়ার</Button>
+                      <Button onClick={postToSite} disabled={postingToSite} variant="secondary" className="h-8 text-[10px] px-1" size="sm">
+                        <Send className="w-3 h-3 mr-0.5" />{postingToSite ? "..." : "পোস্ট"}
                       </Button>
-                      <Button onClick={shareToBlogger} variant="outline" className="flex-1 h-9" size="sm">
-                        <Globe className="w-4 h-4 mr-1" />ব্লগার শেয়ার
+                      <Button onClick={shareToBlogger} variant="outline" className="h-8 text-[10px] px-1" size="sm">
+                        <Globe className="w-3 h-3 mr-0.5" />ব্লগার
                       </Button>
                     </div>
                   </div>
