@@ -1224,37 +1224,35 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 </div>
                 {showQr && <Input placeholder="QR URL" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="h-8 text-xs" />}
 
-                {/* Manual position controls for title & quote */}
-                <div className="space-y-1.5 bg-muted/50 rounded p-2">
-                  <span className="text-[11px] font-medium">📍 টেক্সট পজিশন কন্ট্রোল</span>
-                  <div className="grid grid-cols-2 gap-2">
+                {/* Compact position controls - hidden behind details on mobile */}
+                <details className="bg-muted/50 rounded">
+                  <summary className="text-[11px] font-medium p-2 cursor-pointer">📍 পজিশন স্লাইডার (ড্র্যাগের বিকল্প)</summary>
+                  <div className="grid grid-cols-2 gap-2 px-2 pb-2">
                     <div>
-                      <label className="text-[10px] text-muted-foreground">শিরোনাম X: {titleOffsetX}%</label>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম X</label>
                       <Slider value={[titleOffsetX]} onValueChange={([v]) => setTitleOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground">শিরোনাম Y: {titleOffsetY}%</label>
+                      <label className="text-[10px] text-muted-foreground">শিরোনাম Y</label>
                       <Slider value={[titleOffsetY]} onValueChange={([v]) => setTitleOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
                     </div>
                     {customQuote && (
                       <>
                         <div>
-                          <label className="text-[10px] text-muted-foreground">কোটেশন X: {quoteOffsetX}%</label>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন X</label>
                           <Slider value={[quoteOffsetX]} onValueChange={([v]) => setQuoteOffsetX(v)} min={0} max={100} step={1} className="mt-0.5" />
                         </div>
                         <div>
-                          <label className="text-[10px] text-muted-foreground">কোটেশন Y: {quoteOffsetY}%</label>
+                          <label className="text-[10px] text-muted-foreground">কোটেশন Y</label>
                           <Slider value={[quoteOffsetY]} onValueChange={([v]) => setQuoteOffsetY(v)} min={0} max={100} step={1} className="mt-0.5" />
                         </div>
                       </>
                     )}
                   </div>
-                </div>
+                </details>
 
-                <p className="text-[10px] text-muted-foreground">👆 প্রিভিউতে টাচ/ড্র্যাগ করে অথবা উপরের স্লাইডার দিয়ে পজিশন ঠিক করুন</p>
-
-                <Button onClick={generateCard} className="w-full h-10">
-                  <Eye className="w-4 h-4 mr-2" />প্রিভিউ তৈরি করুন
+                <Button onClick={generateCard} className="w-full h-9">
+                  <Eye className="w-4 h-4 mr-1" />প্রিভিউ তৈরি করুন
                 </Button>
               </CardContent>
             </Card>
