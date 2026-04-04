@@ -228,6 +228,19 @@ const Index = () => {
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
   const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
   const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
+  const { data: galleryPosts } = useQuery({
+    queryKey: ["posts", "galleryPreview"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, title, image_url, slug")
+        .eq("status", "published")
+        .not("image_url", "is", null)
+        .order("published_at", { ascending: false })
+        .limit(6);
+      return data || [];
+    },
+  });
 
   const divisionSections = [
     { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
@@ -336,6 +349,29 @@ const Index = () => {
               <div className="mt-4">
                 <SectionTitle title="বিনোদন" />
                 <MasonryGrid posts={(entertainmentPosts ?? []).slice(0, sc("entertainment", 4))} columns={2} />
+              </div>
+            )}
+
+            {/* Gallery Preview */}
+            {sc("gallery") > 0 && (galleryPosts ?? []).length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <SectionTitle title="📸 ফটো গ্যালারি" />
+                  <Link to="/gallery" className="text-xs text-accent hover:underline font-medium">সব দেখুন →</Link>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {(galleryPosts ?? []).slice(0, sc("gallery", 6)).map((post) => (
+                    <Link key={post.id} to="/gallery" className="group relative overflow-hidden rounded-lg bg-muted aspect-square">
+                      {post.image_url && (
+                        <img src={post.image_url} alt={cleanText(post.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="absolute bottom-0 left-0 right-0 p-1.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                        <p className="text-white text-[9px] sm:text-[10px] font-medium line-clamp-2">{cleanText(post.title)}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
 
