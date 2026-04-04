@@ -1281,6 +1281,34 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                 <canvas ref={canvasRef} className="hidden" />
                 {preview ? (
                   <div className="space-y-2">
+                    {/* Drag mode selector + lock controls */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground mr-1">ড্র্যাগ:</span>
+                      {(["title", "quote", "person", "logo"] as const).map(mode => {
+                        const labels = { title: "শিরোনাম", quote: "কোটেশন", person: "ছবি", logo: "লোগো" };
+                        const colors = { title: "yellow", quote: "green", person: "blue", logo: "purple" };
+                        const isLocked = lockedElements.has(mode);
+                        const isActive = activeDragMode === mode;
+                        const disabled = (mode === "person" && !uploadedPersonImage) || (mode === "quote" && !customQuote) || (mode === "logo" && !uploadedLogo);
+                        if (disabled) return null;
+                        return (
+                          <div key={mode} className="flex items-center">
+                            <button onClick={() => setActiveDragMode(mode)}
+                              className={`text-[10px] px-2 py-0.5 rounded-l border transition-colors ${
+                                isActive ? `bg-${colors[mode]}-500/20 border-${colors[mode]}-500 text-${colors[mode]}-700 dark:text-${colors[mode]}-300 font-semibold` : "bg-card border-border hover:bg-muted"
+                              } ${isLocked ? "opacity-50" : ""}`}>
+                              {labels[mode]}
+                            </button>
+                            <button onClick={() => toggleLock(mode)} title={isLocked ? "আনলক" : "লক"}
+                              className={`text-[10px] px-1 py-0.5 rounded-r border-y border-r transition-colors ${
+                                isLocked ? "bg-destructive/20 border-destructive/50 text-destructive" : "bg-card border-border hover:bg-muted text-muted-foreground"
+                              }`}>
+                              {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                     <div
                       ref={previewContainerRef}
                       onPointerDown={handlePointerDown}
@@ -1289,32 +1317,31 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
                       className="relative touch-none select-none cursor-grab active:cursor-grabbing"
                     >
                       <img src={preview} alt="Photo Card Preview" className="w-full rounded-lg shadow-lg pointer-events-none" draggable={false} />
-                      {/* Selection indicators */}
                       {dragTarget && (
                         <div className="absolute inset-0 pointer-events-none">
                           <div className={`absolute w-5 h-5 rounded-full border-2 border-dashed animate-pulse ${
-                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : "border-yellow-400 bg-yellow-400/30"
+                            dragTarget === "person" ? "border-blue-400 bg-blue-400/30" : dragTarget === "quote" ? "border-green-400 bg-green-400/30" : dragTarget === "logo" ? "border-purple-400 bg-purple-400/30" : "border-yellow-400 bg-yellow-400/30"
                           }`} style={{
-                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : titleOffsetX)}%`,
-                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : titleOffsetY)}%`,
+                            left: `${(dragTarget === "person" ? personOffsetX : dragTarget === "quote" ? quoteOffsetX : dragTarget === "logo" ? logoOffsetX : titleOffsetX)}%`,
+                            top: `${(dragTarget === "person" ? personOffsetY : dragTarget === "quote" ? quoteOffsetY : dragTarget === "logo" ? logoOffsetY : titleOffsetY)}%`,
                             transform: "translate(-50%, -50%)",
                           }} />
                         </div>
                       )}
-                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[10px] px-2.5 py-1 rounded-full transition-colors ${
-                        dragTarget ? (dragTarget === "person" ? "bg-blue-600/80" : dragTarget === "quote" ? "bg-green-600/80" : "bg-yellow-600/80") : "bg-black/60"
+                      <div className={`absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[9px] px-2 py-0.5 rounded-full transition-colors ${
+                        dragTarget ? "bg-primary/80" : "bg-black/50"
                       }`}>
-                        {dragTarget ? `✋ ${dragTarget === "person" ? "ছবি" : dragTarget === "quote" ? "কোটেশন" : "শিরোনাম"} সরাচ্ছেন` : "👆 ট্যাপ করে ড্র্যাগ করুন"}
+                        {dragTarget ? `✋ সরাচ্ছেন` : `👆 ${({title:"শিরোনাম",quote:"কোটেশন",person:"ছবি",logo:"লোগো"})[activeDragMode]} ড্র্যাগ করুন`}
                       </div>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Button onClick={downloadCard} className="flex-1 h-9" size="sm"><Download className="w-4 h-4 mr-1" />ডাউনলোড</Button>
-                      <Button onClick={shareCard} variant="outline" className="flex-1 h-9" size="sm"><Share2 className="w-4 h-4 mr-1" />শেয়ার</Button>
-                      <Button onClick={postToSite} disabled={postingToSite} variant="secondary" className="flex-1 h-9" size="sm">
-                        <Send className="w-4 h-4 mr-1" />{postingToSite ? "পোস্ট হচ্ছে..." : "সাইটে পোস্ট"}
+                    <div className="grid grid-cols-4 gap-1">
+                      <Button onClick={downloadCard} className="h-8 text-[10px] px-1" size="sm"><Download className="w-3 h-3 mr-0.5" />ডাউনলোড</Button>
+                      <Button onClick={shareCard} variant="outline" className="h-8 text-[10px] px-1" size="sm"><Share2 className="w-3 h-3 mr-0.5" />শেয়ার</Button>
+                      <Button onClick={postToSite} disabled={postingToSite} variant="secondary" className="h-8 text-[10px] px-1" size="sm">
+                        <Send className="w-3 h-3 mr-0.5" />{postingToSite ? "..." : "পোস্ট"}
                       </Button>
-                      <Button onClick={shareToBlogger} variant="outline" className="flex-1 h-9" size="sm">
-                        <Globe className="w-4 h-4 mr-1" />ব্লগার শেয়ার
+                      <Button onClick={shareToBlogger} variant="outline" className="h-8 text-[10px] px-1" size="sm">
+                        <Globe className="w-3 h-3 mr-0.5" />ব্লগার
                       </Button>
                     </div>
                   </div>
