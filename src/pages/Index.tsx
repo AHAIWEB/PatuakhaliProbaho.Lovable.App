@@ -228,6 +228,9 @@ const Index = () => {
   const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
   const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
   const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
+  const { data: educationPosts } = useCategoryPosts("education", sc("education", 4), ["শিক্ষা"]);
+  const { data: economyPosts } = useCategoryPosts("economy", sc("economy", 4), ["অর্থনীতি", "business"]);
+  const { data: crimePosts } = useCategoryPosts("crime", sc("crime", 4), ["অপরাধ"]);
   const { data: galleryPosts } = useQuery({
     queryKey: ["posts", "galleryPreview"],
     queryFn: async () => {
