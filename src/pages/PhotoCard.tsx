@@ -43,10 +43,15 @@ const builtInFrames = [
   { id: "double", name: "ডাবল লাইন" },
   { id: "corner-accent", name: "কর্নার অ্যাক্সেন্ট" },
   { id: "film-strip", name: "ফিল্ম স্ট্রিপ" },
-   { id: "ornate", name: "অর্নেট" },
-   { id: "modern-geo", name: "মডার্ন জিও" },
-   { id: "neon-glow", name: "নিয়ন গ্লো" },
-   { id: "newspaper", name: "নিউজপেপার" },
+  { id: "ornate", name: "অর্নেট" },
+  { id: "modern-geo", name: "মডার্ন জিও" },
+  { id: "neon-glow", name: "নিয়ন গ্লো" },
+  { id: "newspaper", name: "নিউজপেপার" },
+  { id: "wave", name: "ওয়েভ" },
+  { id: "diamond", name: "ডায়মন্ড" },
+  { id: "spotlight", name: "স্পটলাইট" },
+  { id: "ribbon", name: "রিবন" },
+  { id: "mosaic", name: "মোজাইক" },
 ];
 
 const PhotoCard = () => {
