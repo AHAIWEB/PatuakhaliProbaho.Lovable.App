@@ -1,4 +1,5 @@
 import { useTickerHeadlines } from "@/hooks/usePosts";
+import { cleanText } from "@/lib/content";
 
 const NewsTicker = () => {
   const { data: headlines } = useTickerHeadlines();
@@ -14,7 +15,7 @@ const NewsTicker = () => {
         <div className="overflow-hidden flex-1">
           <div className="animate-ticker whitespace-nowrap text-xs sm:text-sm">
             {items.length > 0 ? items.map((h) => (
-              <span key={h.id} className="mx-4 sm:mx-6">● {h.title}</span>
+              <span key={h.id} className="mx-4 sm:mx-6">● {cleanText(h.title)}</span>
             )) : (
               <span className="mx-4">● সর্বশেষ সংবাদ লোড হচ্ছে...</span>
             )}
