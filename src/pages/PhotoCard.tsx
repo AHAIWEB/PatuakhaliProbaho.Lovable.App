@@ -900,29 +900,27 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
     const container = previewContainerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Determine which element is closest to the touch point
-    const titleDist = Math.hypot(xPct - titleOffsetX, yPct - titleOffsetY);
-    const quoteDist = customQuote ? Math.hypot(xPct - quoteOffsetX, yPct - quoteOffsetY) : Infinity;
-    const personDist = uploadedPersonImage ? Math.hypot(xPct - personOffsetX, yPct - personOffsetY) : Infinity;
+    // Use the active drag mode selector instead of proximity
+    let target = activeDragMode;
+    
+    // Skip if locked
+    if (lockedElements.has(target)) return;
+    
+    // Skip if element doesn't exist
+    if (target === "person" && !uploadedPersonImage) target = "title";
+    if (target === "quote" && !customQuote) target = "title";
+    if (target === "logo" && !uploadedLogo) target = "title";
+    if (lockedElements.has(target)) return;
 
-    let target = "title";
     let startOx = titleOffsetX, startOy = titleOffsetY;
-    const minDist = Math.min(titleDist, quoteDist, personDist);
-
-    if (minDist === personDist && personDist < 30) {
-      target = "person"; startOx = personOffsetX; startOy = personOffsetY;
-    } else if (minDist === quoteDist && quoteDist < 30) {
-      target = "quote"; startOx = quoteOffsetX; startOy = quoteOffsetY;
-    } else {
-      target = "title"; startOx = titleOffsetX; startOy = titleOffsetY;
-    }
+    if (target === "person") { startOx = personOffsetX; startOy = personOffsetY; }
+    else if (target === "quote") { startOx = quoteOffsetX; startOy = quoteOffsetY; }
+    else if (target === "logo") { startOx = logoOffsetX; startOy = logoOffsetY; }
 
     setDragTarget(target as any);
     dragRef.current = { startX: e.clientX, startY: e.clientY, startOx, startOy, active: true, target };
-  }, [uploadedPersonImage, personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, customQuote]);
+  }, [activeDragMode, lockedElements, uploadedPersonImage, uploadedLogo, personOffsetX, personOffsetY, titleOffsetX, titleOffsetY, quoteOffsetX, quoteOffsetY, logoOffsetX, logoOffsetY, customQuote]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current?.active) return;
@@ -939,6 +937,7 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
       case "person": setPersonOffsetX(nx); setPersonOffsetY(ny); break;
       case "title": setTitleOffsetX(nx); setTitleOffsetY(ny); break;
       case "quote": setQuoteOffsetX(nx); setQuoteOffsetY(ny); break;
+      case "logo": setLogoOffsetX(nx); setLogoOffsetY(ny); break;
     }
   }, []);
 
