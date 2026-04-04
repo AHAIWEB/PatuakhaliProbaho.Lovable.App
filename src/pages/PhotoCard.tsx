@@ -436,11 +436,81 @@ const PhotoCard = () => {
         break;
       }
       case "newspaper": {
-        // Classic newspaper style
         ctx.fillStyle = frameColor1; ctx.fillRect(0, 0, W, 6); ctx.fillRect(0, H - 6, W, 6);
         ctx.fillRect(0, 10, W, 2); ctx.fillRect(0, H - 12, W, 2);
         ctx.fillRect(0, 0, 6, H); ctx.fillRect(W - 6, 0, 6, H);
         ctx.fillRect(10, 0, 2, H); ctx.fillRect(W - 12, 0, 2, H);
+        break;
+      }
+      case "wave": {
+        // Wavy top & bottom borders
+        ctx.strokeStyle = grad; ctx.lineWidth = 5;
+        for (const yBase of [20, H - 20]) {
+          ctx.beginPath();
+          for (let x = 0; x <= W; x += 2) {
+            const y = yBase + Math.sin(x / 30) * 12;
+            x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        // Side accent lines
+        ctx.fillStyle = frameColor1; ctx.globalAlpha = 0.5;
+        ctx.fillRect(0, 0, 8, H); ctx.fillRect(W - 8, 0, 8, H);
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "diamond": {
+        // Diamond shapes at corners + thin border
+        ctx.strokeStyle = grad; ctx.lineWidth = 3;
+        ctx.strokeRect(18, 18, W - 36, H - 36);
+        const ds = 40;
+        [[W / 2, 18], [W / 2, H - 18], [18, H / 2], [W - 18, H / 2]].forEach(([cx, cy]) => {
+          ctx.fillStyle = frameColor1;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - ds / 2); ctx.lineTo(cx + ds / 2, cy);
+          ctx.lineTo(cx, cy + ds / 2); ctx.lineTo(cx - ds / 2, cy);
+          ctx.closePath(); ctx.fill();
+        });
+        break;
+      }
+      case "spotlight": {
+        // Radial spotlight effect from corners
+        const r1 = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.4);
+        r1.addColorStop(0, frameColor1 + "80"); r1.addColorStop(1, "transparent");
+        ctx.fillStyle = r1; ctx.fillRect(0, 0, W, H);
+        const r2 = ctx.createRadialGradient(W, H, 0, W, H, W * 0.4);
+        r2.addColorStop(0, frameColor2 + "80"); r2.addColorStop(1, "transparent");
+        ctx.fillStyle = r2; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = grad; ctx.lineWidth = 2;
+        ctx.strokeRect(12, 12, W - 24, H - 24);
+        break;
+      }
+      case "ribbon": {
+        // Ribbon strips at top-left and bottom-right
+        const rw = 180, rh = 50;
+        ctx.save(); ctx.translate(0, 60); ctx.rotate(-0.1);
+        ctx.fillStyle = frameColor1; ctx.fillRect(-20, 0, rw + 40, rh);
+        ctx.restore();
+        ctx.save(); ctx.translate(W - rw + 20, H - 110); ctx.rotate(-0.1);
+        ctx.fillStyle = frameColor2; ctx.fillRect(-20, 0, rw + 40, rh);
+        ctx.restore();
+        ctx.strokeStyle = grad; ctx.lineWidth = 2;
+        ctx.strokeRect(8, 8, W - 16, H - 16);
+        break;
+      }
+      case "mosaic": {
+        // Small mosaic tiles along borders
+        const ts2 = 20;
+        ctx.globalAlpha = 0.6;
+        for (let x = 0; x < W; x += ts2) {
+          ctx.fillStyle = (x / ts2) % 2 === 0 ? frameColor1 : frameColor2;
+          ctx.fillRect(x, 0, ts2, ts2); ctx.fillRect(x, H - ts2, ts2, ts2);
+        }
+        for (let y = ts2; y < H - ts2; y += ts2) {
+          ctx.fillStyle = (y / ts2) % 2 === 0 ? frameColor2 : frameColor1;
+          ctx.fillRect(0, y, ts2, ts2); ctx.fillRect(W - ts2, y, ts2, ts2);
+        }
+        ctx.globalAlpha = 1;
         break;
       }
     }
