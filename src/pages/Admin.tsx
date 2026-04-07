@@ -721,6 +721,38 @@ const Admin = () => {
                     ))}
                   </select>
                   <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} placeholder="কন্টেন্ট" className="text-sm" />
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Input placeholder="ইমেজ URL" value={editImageUrl} onChange={(e) => setEditImageUrl(e.target.value)} className="text-sm h-8" />
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) { const url = await handleImageUpload(file); if (url) setEditImageUrl(url); }
+                      }} />
+                      <Button type="button" variant="outline" size="sm" className="h-8" asChild disabled={uploadingImage}>
+                        <span><Upload className="w-3 h-3 mr-1" />{uploadingImage ? "..." : "আপলোড"}</span>
+                      </Button>
+                    </label>
+                  </div>
+                  {editImageUrl && <img src={editImageUrl} alt="preview" className="h-12 object-cover rounded" />}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editDivision} onChange={(e) => { setEditDivision(e.target.value); setEditDistrict(""); setEditUpazila(""); }}>
+                      <option value="">বিভাগ</option>
+                      {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                        <option key={k} value={k}>{v}</option>
+                      )}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editDistrict} onChange={(e) => { setEditDistrict(e.target.value); setEditUpazila(""); }} disabled={!editDivision}>
+                      <option value="">জেলা</option>
+                      {editDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editUpazila} onChange={(e) => setEditUpazila(e.target.value)} disabled={!editDistrict}>
+                      <option value="">উপজেলা</option>
+                      {editUpazilas.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <Input value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder="ট্যাগ (কমা দিয়ে আলাদা)" className="text-sm h-8" />
                   <Button onClick={saveEdit} size="sm"><Save className="w-3.5 h-3.5 mr-1" />সেভ</Button>
                 </CardContent>
               </Card>
