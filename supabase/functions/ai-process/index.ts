@@ -9,7 +9,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, text } = await req.json();
+    const body = await req.json();
+    const { action, text, image } = body;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (action === "extract_quotes") {
