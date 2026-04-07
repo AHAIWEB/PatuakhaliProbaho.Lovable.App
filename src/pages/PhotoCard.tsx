@@ -301,6 +301,78 @@ const PhotoCard = () => {
     }
   };
 
+  // External card AI: read title/quote from uploaded card image
+  const handleExternalCardAi = async () => {
+    if (!externalCardImage) return;
+    setExternalCardAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-process", {
+        body: { action: "read_card", image: externalCardImage },
+      });
+      if (error) throw error;
+      setExternalCardAiResult({
+        title: data?.title || "",
+        quote: data?.quote || data?.text || "",
+        sourceUrl: data?.sourceUrl || "",
+        content: data?.content || "",
+      });
+      toast({ title: "✅ AI কার্ড পড়েছে", description: data?.title ? `শিরোনাম: ${data.title.substring(0, 50)}...` : "টেক্সট পাওয়া গেছে" });
+    } catch (e: any) {
+      // Fallback: use the card title from custom title
+      toast({ title: "AI পড়তে পারেনি", description: "ম্যানুয়ালি শিরোনাম দিন", variant: "destructive" });
+    }
+    setExternalCardAiLoading(false);
+  };
+
+  // Post external card to site with AI-extracted content
+  const handlePostExternalCard = async () => {
+    if (!externalCardImage) return;
+    setPostingExternalCard(true);
+    try {
+      // Upload the card image
+      const blob = await (await fetch(externalCardImage)).blob();
+      const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+      const filePath = `photocards/ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("site-assets")
+        .upload(filePath, blob, { contentType: blob.type, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("site-assets").getPublicUrl(filePath);
+      const title = externalCardAiResult?.title || customTitle || "ফটোকার্ড";
+      const content = externalCardAiResult?.content || externalCardAiResult?.quote || title;
+      const slug = title.replace(/[^\u0980-\u09FFa-zA-Z0-9\s]/g, "").replace(/\s+/g, "-").toLowerCase() + "-" + Date.now();
+
+      // If AI found a source URL, try to fetch full content
+      let fullContent = content;
+      if (externalCardAiResult?.sourceUrl) {
+        try {
+          const { data: scraped } = await supabase.functions.invoke("scrape-url", {
+            body: { url: externalCardAiResult.sourceUrl, fullContent: true },
+          });
+          if (scraped?.content) fullContent = scraped.content;
+        } catch { /* use existing content */ }
+      }
+
+      const { error } = await supabase.from("posts").insert({
+        title, slug,
+        content: fullContent,
+        excerpt: (externalCardAiResult?.quote || title).substring(0, 200),
+        image_url: urlData.publicUrl,
+        status: "published",
+        published_at: new Date().toISOString(),
+        author_id: user?.id || null,
+        source_url: externalCardAiResult?.sourceUrl || null,
+        tags: ["ফটোকার্ড"],
+      });
+      if (error) throw error;
+      toast({ title: "✅ সাইটে পোস্ট হয়েছে!" });
+    } catch (e: any) {
+      toast({ title: "পোস্ট ব্যর্থ", description: e.message, variant: "destructive" });
+    }
+    setPostingExternalCard(false);
+  };
+
   const handleFetchUrl = async () => {
     if (!fetchUrl) return;
     setUrlFetching(true);
