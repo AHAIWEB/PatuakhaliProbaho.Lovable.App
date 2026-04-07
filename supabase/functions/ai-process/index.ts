@@ -9,7 +9,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, text } = await req.json();
+    const body = await req.json();
+    const { action, text, image } = body;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (action === "extract_quotes") {
@@ -102,6 +103,47 @@ Deno.serve(async (req) => {
       }
       const summary = text ? text.substring(0, 120) + "..." : "";
       return jsonResponse({ category, tags: [], summary });
+    }
+
+    if (action === "read_card") {
+      // AI reads text/title/quote from an uploaded photo card image
+      if (LOVABLE_API_KEY && image) {
+        try {
+          const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                {
+                  role: "system",
+                  content: `তুমি একজন ফটোকার্ড রিডার। আপলোড করা ইমেজ থেকে শিরোনাম, কোটেশন, এবং সোর্স URL (যদি থাকে) বের করো।
+শুধু JSON ফরম্যাটে উত্তর দাও: {"title": "...", "quote": "...", "sourceUrl": "...", "text": "..."}`
+                },
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "এই ফটোকার্ড থেকে শিরোনাম, কোটেশন/উদ্ধৃতি এবং সোর্স URL পড়ো।" },
+                    { type: "image_url", image_url: { url: image } },
+                  ],
+                },
+              ],
+              response_format: { type: "json_object" },
+            }),
+          });
+          if (!resp.ok) throw new Error(`AI API error: ${resp.status}`);
+          const data = await resp.json();
+          const content = data.choices?.[0]?.message?.content || "{}";
+          const parsed = JSON.parse(content);
+          return jsonResponse(parsed);
+        } catch (e) {
+          return jsonResponse({ error: "AI কার্ড পড়তে পারেনি", title: "", quote: "" });
+        }
+      }
+      return jsonResponse({ error: "API key missing", title: "", quote: "" });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {

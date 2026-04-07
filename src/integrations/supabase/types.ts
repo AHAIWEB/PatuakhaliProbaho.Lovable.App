@@ -127,7 +127,9 @@ export type Database = {
       layout_settings: {
         Row: {
           id: string
+          is_protected: boolean
           is_visible: boolean
+          position: string
           post_count: number
           section_key: string
           section_label: string
@@ -136,7 +138,9 @@ export type Database = {
         }
         Insert: {
           id?: string
+          is_protected?: boolean
           is_visible?: boolean
+          position?: string
           post_count?: number
           section_key: string
           section_label: string
@@ -145,7 +149,9 @@ export type Database = {
         }
         Update: {
           id?: string
+          is_protected?: boolean
           is_visible?: boolean
+          position?: string
           post_count?: number
           section_key?: string
           section_label?: string

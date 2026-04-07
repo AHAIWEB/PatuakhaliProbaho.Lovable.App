@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database, Archive, MapPin } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database, Archive, MapPin, Lock, Unlock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Slider } from "@/components/ui/slider";
 import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
@@ -1248,28 +1249,27 @@ const Admin = () => {
   );
 };
 
-// Section position map
-const sectionPositionMap: Record<string, string> = {
-  national: "বাম সাইডবার", international: "বাম সাইডবার", politics: "বাম সাইডবার", technology: "বাম সাইডবার",
-  highlighted: "মূল কন্টেন্ট", barisal: "মূল কন্টেন্ট", sports: "মূল কন্টেন্ট", 
-  entertainment: "মূল কন্টেন্ট", gallery: "মূল কন্টেন্ট", health: "মূল কন্টেন্ট",
-  lifestyle: "মূল কন্টেন্ট", religion: "মূল কন্টেন্ট", travel: "মূল কন্টেন্ট",
-  education: "মূল কন্টেন্ট", economy: "মূল কন্টেন্ট", crime: "মূল কন্টেন্ট",
-  people: "মূল কন্টেন্ট", jobs: "মূল কন্টেন্ট",
-  popular: "ডান সাইডবার", dhaka: "ডান সাইডবার", chattogram: "ডান সাইডবার",
-  sylhet: "ডান সাইডবার", rajshahi: "ডান সাইডবার", khulna: "ডান সাইডবার",
-  rangpur: "ডান সাইডবার", mymensingh: "ডান সাইডবার",
-};
-
 const LayoutSettingsTab = () => {
   const { data: settings, isLoading } = useLayoutSettings();
   const updateSetting = useUpdateLayoutSetting();
   const { toast } = useToast();
   const [newKey, setNewKey] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newPosition, setNewPosition] = useState("center");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  // Fetch categories for auto-generate
+  const { data: dbCategories } = useQuery({
+    queryKey: ["categories-for-layout"],
+    queryFn: async () => {
+      const { data } = await supabase.from("categories").select("*").order("sort_order");
+      return data || [];
+    },
+  });
 
   const sortedSettings = [...(settings ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
@@ -1277,18 +1277,58 @@ const LayoutSettingsTab = () => {
     if (!newKey || !newLabel) return;
     const maxSort = (settings ?? []).reduce((m, s) => Math.max(m, s.sort_order || 0), 0);
     const { error } = await supabase.from("layout_settings").insert({
-      section_key: newKey, section_label: newLabel, post_count: 5, is_visible: true, sort_order: maxSort + 1,
-    });
+      section_key: newKey, section_label: newLabel, post_count: 5, is_visible: true, sort_order: maxSort + 1, position: newPosition,
+    } as any);
     if (error) { toast({ title: "ত্রুটি", description: error.message, variant: "destructive" }); return; }
     toast({ title: "সেকশন যুক্ত হয়েছে" });
-    setNewKey(""); setNewLabel("");
+    setNewKey(""); setNewLabel(""); setNewPosition("center");
     updateSetting.mutate({ id: "refresh" } as any);
   };
 
+  // Auto-generate sections from categories
+  const autoGenerateSections = async () => {
+    const existingKeys = new Set((settings ?? []).map(s => s.section_key));
+    const parentCats = (dbCategories || []).filter(c => !c.parent_id);
+    let added = 0;
+    const maxSort = (settings ?? []).reduce((m, s) => Math.max(m, s.sort_order || 0), 0);
+    for (const cat of parentCats) {
+      if (!existingKeys.has(cat.slug)) {
+        await supabase.from("layout_settings").insert({
+          section_key: cat.slug, section_label: cat.name, post_count: 4, is_visible: true, sort_order: maxSort + added + 1, position: "center",
+        } as any);
+        added++;
+      }
+    }
+    if (added > 0) {
+      toast({ title: `${added}টি নতুন সেকশন অটো-জেনারেট হয়েছে` });
+      updateSetting.mutate({ id: "refresh" } as any);
+    } else {
+      toast({ title: "সব ক্যাটাগরি ইতোমধ্যে যুক্ত আছে" });
+    }
+  };
+
   const deleteSection = async (id: string) => {
-    if (!confirm("এই সেকশন মুছে ফেলতে চান?")) return;
+    const section = sortedSettings.find(s => s.id === id);
+    if (!section) return;
+    if ((section as any).is_protected) {
+      // Require typing section name to confirm
+      if (deleteConfirmId !== id) {
+        setDeleteConfirmId(id);
+        setDeleteConfirmText("");
+        toast({ title: "⚠️ প্রটেক্টেড সেকশন", description: `ডিলিট করতে "${section.section_label}" টাইপ করুন` });
+        return;
+      }
+      if (deleteConfirmText !== section.section_label) {
+        toast({ title: "নাম মিলছে না", description: `"${section.section_label}" সঠিকভাবে লিখুন`, variant: "destructive" });
+        return;
+      }
+    } else {
+      if (!confirm(`"${section.section_label}" সেকশন মুছে ফেলতে চান?`)) return;
+    }
     await supabase.from("layout_settings").delete().eq("id", id);
     toast({ title: "সেকশন মুছে ফেলা হয়েছে" });
+    setDeleteConfirmId(null);
+    setDeleteConfirmText("");
     updateSetting.mutate({ id: "refresh" } as any);
   };
 
@@ -1296,6 +1336,18 @@ const LayoutSettingsTab = () => {
     const { error } = await supabase.from("layout_settings").update({ section_label: editLabel }).eq("id", id);
     if (!error) toast({ title: "লেবেল আপডেট হয়েছে" });
     setEditingId(null);
+    updateSetting.mutate({ id: "refresh" } as any);
+  };
+
+  const changePosition = async (id: string, position: string) => {
+    await supabase.from("layout_settings").update({ position } as any).eq("id", id);
+    toast({ title: "পজিশন পরিবর্তন হয়েছে" });
+    updateSetting.mutate({ id: "refresh" } as any);
+  };
+
+  const toggleProtection = async (id: string, currentlyProtected: boolean) => {
+    await supabase.from("layout_settings").update({ is_protected: !currentlyProtected } as any).eq("id", id);
+    toast({ title: !currentlyProtected ? "🔒 সেকশন প্রটেক্ট করা হয়েছে" : "🔓 প্রটেকশন সরানো হয়েছে" });
     updateSetting.mutate({ id: "refresh" } as any);
   };
 
@@ -1314,13 +1366,17 @@ const LayoutSettingsTab = () => {
 
   if (isLoading) return <div className="p-4 text-center text-sm text-muted-foreground">লোড হচ্ছে...</div>;
 
+  const posLabel = (p: string) => p === "left" ? "◀ বাম" : p === "right" ? "▶ ডান" : "▣ মাঝে";
+  const posBg = (p: string) => p === "left" ? "border-l-4 border-l-blue-400" : p === "right" ? "border-l-4 border-l-orange-400" : "border-l-4 border-l-green-400";
+  const posClr = (p: string) => p === "left" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600" : p === "right" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600" : "bg-green-100 dark:bg-green-900/30 text-green-600";
+
   return (
     <Card>
       <CardHeader className="p-3 sm:p-6">
         <CardTitle className="text-sm sm:text-base flex items-center gap-2">
           <Settings2 className="w-4 h-4" /> হোমপেজ লেআউট সেটিংস
         </CardTitle>
-        <p className="text-xs text-muted-foreground">☝️ ড্র্যাগ করে ক্রম পরিবর্তন করুন। রঙিন ব্যাজ দেখায় কোন সেকশন পেজের কোথায় আছে।</p>
+        <p className="text-xs text-muted-foreground">☝️ ড্র্যাগ করে ক্রম পরিবর্তন করুন। পজিশন ড্রপডাউন দিয়ে বাম/মাঝে/ডান পরিবর্তন করুন। 🔒 = ডিলিট প্রটেক্টেড।</p>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0 space-y-3">
         {/* Position legend */}
@@ -1330,18 +1386,22 @@ const LayoutSettingsTab = () => {
           <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded">▶ ডান সাইডবার</span>
         </div>
 
-        {/* Add new section */}
+        {/* Add new section + auto-generate */}
         <div className="flex gap-1.5 flex-wrap border-b pb-3 border-border">
-          <Input placeholder="সেকশন key (e.g. sports)" value={newKey} onChange={(e) => setNewKey(e.target.value)} className="flex-1 min-w-[100px] h-8 text-xs" />
-          <Input placeholder="লেবেল (যেমন: খেলাধুলা)" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} className="flex-1 min-w-[100px] h-8 text-xs" />
+          <Input placeholder="সেকশন key (e.g. sports)" value={newKey} onChange={(e) => setNewKey(e.target.value)} className="flex-1 min-w-[80px] h-8 text-xs" />
+          <Input placeholder="লেবেল (যেমন: খেলাধুলা)" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} className="flex-1 min-w-[80px] h-8 text-xs" />
+          <select className="border rounded-md px-2 bg-background text-xs h-8" value={newPosition} onChange={(e) => setNewPosition(e.target.value)}>
+            <option value="left">◀ বাম</option>
+            <option value="center">▣ মাঝে</option>
+            <option value="right">▶ ডান</option>
+          </select>
           <Button onClick={addSection} size="sm" className="h-8 text-xs"><Plus className="w-3 h-3 mr-1" />যুক্ত</Button>
+          <Button onClick={autoGenerateSections} size="sm" variant="outline" className="h-8 text-xs"><RefreshCw className="w-3 h-3 mr-1" />অটো-জেনারেট</Button>
         </div>
 
         {sortedSettings.map((s, idx) => {
-          const pos = sectionPositionMap[s.section_key] || "কাস্টম";
-          const posBg = pos.includes("বাম") ? "border-l-4 border-l-blue-400" 
-            : pos.includes("মূল") ? "border-l-4 border-l-green-400"
-            : "border-l-4 border-l-orange-400";
+          const pos = (s as any).position || "center";
+          const isProtected = (s as any).is_protected || false;
           return (
             <div
               key={s.id}
@@ -1349,7 +1409,7 @@ const LayoutSettingsTab = () => {
               onDragStart={() => setDragIdx(idx)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(idx)}
-              className={`flex items-center gap-2 p-2 rounded-lg border bg-card ${posBg} ${dragIdx === idx ? "opacity-50 scale-95" : ""} transition-all`}
+              className={`flex items-center gap-2 p-2 rounded-lg border bg-card ${posBg(pos)} ${dragIdx === idx ? "opacity-50 scale-95" : ""} transition-all`}
             >
               <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
               <button onClick={() => { updateSetting.mutate({ id: s.id, is_visible: !s.is_visible }); }} className="shrink-0">
@@ -1365,20 +1425,34 @@ const LayoutSettingsTab = () => {
                 ) : (
                   <div onClick={() => { setEditingId(s.id); setEditLabel(s.section_label); }} className="cursor-pointer">
                     <span className={`text-xs sm:text-sm font-medium ${!s.is_visible ? "opacity-50 line-through" : ""}`}>
-                      {s.section_label}
+                      {isProtected && "🔒 "}{s.section_label}
                     </span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1 rounded">{s.section_key}</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
-                        pos.includes("বাম") ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600" 
-                        : pos.includes("মূল") ? "bg-green-100 dark:bg-green-900/30 text-green-600"
-                        : "bg-orange-100 dark:bg-orange-900/30 text-orange-600"
-                      }`}>{pos}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${posClr(pos)}`}>{posLabel(pos)}</span>
                     </div>
+                  </div>
+                )}
+                {/* Delete confirmation for protected */}
+                {deleteConfirmId === s.id && isProtected && (
+                  <div className="flex gap-1 mt-1">
+                    <Input placeholder={`"${s.section_label}" লিখুন`} value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} className="h-7 text-xs flex-1" />
+                    <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => deleteSection(s.id)}>নিশ্চিত</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDeleteConfirmId(null)}><X className="w-3 h-3" /></Button>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-1">
+                {/* Position dropdown */}
+                <select
+                  className="border rounded px-1 bg-background text-[10px] h-7 w-16"
+                  value={pos}
+                  onChange={(e) => changePosition(s.id, e.target.value)}
+                >
+                  <option value="left">◀ বাম</option>
+                  <option value="center">▣ মাঝে</option>
+                  <option value="right">▶ ডান</option>
+                </select>
                 <Button size="icon" variant="outline" className="h-7 w-7" disabled={s.post_count <= 1}
                   onClick={() => updateSetting.mutate({ id: s.id, post_count: Math.max(1, s.post_count - 1) })}>
                   <Minus className="w-3 h-3" />
@@ -1388,6 +1462,10 @@ const LayoutSettingsTab = () => {
                   onClick={() => updateSetting.mutate({ id: s.id, post_count: s.post_count + 1 })}>
                   <Plus className="w-3 h-3" />
                 </Button>
+                {/* Lock/unlock */}
+                <button onClick={() => toggleProtection(s.id, isProtected)} className="shrink-0 p-1 hover:bg-muted rounded" title={isProtected ? "প্রটেকশন সরান" : "প্রটেক্ট করুন"}>
+                  {isProtected ? <Lock className="w-3 h-3 text-amber-600" /> : <Unlock className="w-3 h-3 text-muted-foreground" />}
+                </button>
                 <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => deleteSection(s.id)}>
                   <Trash2 className="w-3 h-3" />
                 </Button>
