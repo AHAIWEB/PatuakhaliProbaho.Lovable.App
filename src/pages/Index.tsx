@@ -38,7 +38,6 @@ const useCategoryPosts = (slug: string, limit = 4, aliases: string[] = []) =>
 
       const rootCategoryIds = (cats || []).map((cat) => cat.id);
 
-      // Get sub-category IDs too
       const { data: subCats, error: subCategoryError } = rootCategoryIds.length > 0
         ? await supabase
             .from("categories")
@@ -51,7 +50,6 @@ const useCategoryPosts = (slug: string, limit = 4, aliases: string[] = []) =>
       const ids = new Set<string>();
       const merged: Post[] = [];
 
-      // First: posts with matching category_id
       if (allCatIds.length > 0) {
         const { data, error } = await supabase
           .from("posts")
@@ -72,7 +70,6 @@ const useCategoryPosts = (slug: string, limit = 4, aliases: string[] = []) =>
 
       if (merged.length >= limit) return merged;
 
-      // Fallback: also match by source_category or tags
       const fallbackFilters = slugOptions
         .flatMap((candidate) => [`source_category.eq.${candidate}`, `tags.cs.{${candidate}}`])
         .join(",");
@@ -86,7 +83,6 @@ const useCategoryPosts = (slug: string, limit = 4, aliases: string[] = []) =>
         .limit(limit);
       if (fallbackError) throw fallbackError;
 
-      // Merge without duplicates
       for (const p of fallback ?? []) {
         if (!ids.has(p.id) && merged.length < limit) {
           merged.push(p);
@@ -103,7 +99,6 @@ const MasonryCard = ({ news, size = "normal", index = 0 }: { news: Post; size?: 
   const postLink = `/post/${news.slug}`;
   const excerpt = cleanText(news.content || news.excerpt || "").substring(0, size === "large" ? 200 : size === "wide" ? 150 : 80);
 
-  // Vary image aspect ratios for visual interest
   const imageAspect = size === "large" ? "aspect-[3/4]" : size === "wide" ? "aspect-[16/9]" : index % 3 === 0 ? "aspect-[4/3]" : index % 3 === 1 ? "aspect-square" : "aspect-[16/10]";
 
   if (size === "small") {
@@ -140,7 +135,6 @@ const MasonryCard = ({ news, size = "normal", index = 0 }: { news: Post; size?: 
               className={`w-full object-cover transition-transform duration-700 group-hover:scale-110 ${imageAspect}`}
               loading="lazy"
             />
-            {/* Gradient overlay on image */}
             <div className="absolute inset-0 bg-gradient-to-t from-foreground/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Link>
         )}
@@ -186,7 +180,6 @@ const MasonryCard = ({ news, size = "normal", index = 0 }: { news: Post; size?: 
   );
 };
 
-/* Masonry column renderer with varied sizes */
 const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }) => {
   return (
     <div className="gap-3" style={{ columnCount: columns }}>
@@ -198,41 +191,35 @@ const MasonryGrid = ({ posts, columns = 2 }: { posts: Post[]; columns?: number }
   );
 };
 
-const Index = () => {
-  // Enable realtime updates for all post queries
-  usePostsRealtime();
+/* Division slug to label map */
+const divisionLabels: Record<string, string> = {
+  dhaka: "ঢাকা বিভাগ", chattogram: "চট্টগ্রাম বিভাগ", sylhet: "সিলেট বিভাগ",
+  rajshahi: "রাজশাহী বিভাগ", khulna: "খুলনা বিভাগ", rangpur: "রংপুর বিভাগ",
+  mymensingh: "ময়মনসিংহ বিভাগ", barisal: "বরিশাল বিভাগ",
+};
 
-  const { data: layoutSettings } = useLayoutSettings();
-  const ls = layoutSettings ?? [];
-  const sc = (key: string, fb = 5) => getSectionCount(ls, key, fb);
+/* Dynamic section component that fetches its own posts */
+const DynamicSection = ({ sectionKey, label, count, position }: { sectionKey: string; label: string; count: number; position: string }) => {
+  // Special sections handled differently
+  const isDivision = ["dhaka", "chattogram", "sylhet", "rajshahi", "khulna", "rangpur", "mymensingh"].includes(sectionKey);
+  const { data: divPosts } = usePostsByDivision(isDivision ? sectionKey : "", isDivision ? count : 0);
+  const isNational = sectionKey === "national";
+  const { data: natPosts } = useNationalPosts(isNational ? count : 0);
+  const isPopular = sectionKey === "popular";
+  const { data: popPosts } = useMostViewedPosts(isPopular ? count : 0);
+  const isHighlighted = sectionKey === "highlighted";
+  const { data: hlPosts } = useHighlightedPosts();
+  const isBarisal = sectionKey === "barisal";
+  const { data: bslPosts } = usePostsByDivision(isBarisal ? "barisal" : "", isBarisal ? count : 0);
+  
+  // Category-based sections
+  const isCatSection = !isDivision && !isNational && !isPopular && !isHighlighted && !isBarisal && sectionKey !== "gallery";
+  const { data: catPosts } = useCategoryPosts(isCatSection ? sectionKey : "", isCatSection ? count : 0);
 
-  const { data: nationalPosts } = useNationalPosts(sc("national", 6));
-  const { data: barisalPosts } = usePostsByDivision("barisal", sc("barisal", 6));
-  const { data: dhakaPosts } = usePostsByDivision("dhaka", sc("dhaka", 3));
-  const { data: chittagongPosts } = usePostsByDivision("chattogram", sc("chattogram", 3));
-  const { data: sylhetPosts } = usePostsByDivision("sylhet", sc("sylhet", 3));
-  const { data: rajshahiPosts } = usePostsByDivision("rajshahi", sc("rajshahi", 3));
-  const { data: khulnaPosts } = usePostsByDivision("khulna", sc("khulna", 3));
-  const { data: rangpurPosts } = usePostsByDivision("rangpur", sc("rangpur", 3));
-  const { data: mymensinghPosts } = usePostsByDivision("mymensingh", sc("mymensingh", 3));
-  const { data: popularPosts } = useMostViewedPosts(sc("popular", 8));
-  const { data: highlightedPosts } = useHighlightedPosts();
-  const { data: politicsPosts } = useCategoryPosts("politics", sc("politics", 4));
-  const { data: sportsPosts } = useCategoryPosts("sports", sc("sports", 4));
-  const { data: entertainmentPosts } = useCategoryPosts("entertainment", sc("entertainment", 4));
-  const { data: internationalPosts } = useCategoryPosts("world", sc("international", 4), ["international"]);
-  const { data: techPosts } = useCategoryPosts("technology", sc("technology", 3));
-  const { data: healthPosts } = useCategoryPosts("health", sc("health", 4));
-  const { data: lifestylePosts } = useCategoryPosts("lifestyle", sc("lifestyle", 4));
-  const { data: religionPosts } = useCategoryPosts("religion", sc("religion", 4));
-  const { data: travelPosts } = useCategoryPosts("travel", sc("travel", 4));
-  const { data: peoplePosts } = useCategoryPosts("people", sc("people", 4));
-  const { data: jobsPosts } = useCategoryPosts("jobs", sc("jobs", 4), ["chakri"]);
-  const { data: educationPosts } = useCategoryPosts("education", sc("education", 4), ["শিক্ষা"]);
-  const { data: economyPosts } = useCategoryPosts("economy", sc("economy", 4), ["অর্থনীতি", "business"]);
-  const { data: crimePosts } = useCategoryPosts("crime", sc("crime", 4), ["অপরাধ"]);
+  // Gallery
+  const isGallery = sectionKey === "gallery";
   const { data: galleryPosts } = useQuery({
-    queryKey: ["posts", "galleryPreview"],
+    queryKey: ["posts", "galleryPreview", count],
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
@@ -240,20 +227,120 @@ const Index = () => {
         .eq("status", "published")
         .not("image_url", "is", null)
         .order("published_at", { ascending: false })
-        .limit(6);
+        .limit(count);
       return data || [];
     },
+    enabled: isGallery && count > 0,
   });
 
-  const divisionSections = [
-    { title: "ঢাকা বিভাগ", posts: dhakaPosts, slug: "dhaka" },
-    { title: "চট্টগ্রাম বিভাগ", posts: chittagongPosts, slug: "chattogram" },
-    { title: "সিলেট বিভাগ", posts: sylhetPosts, slug: "sylhet" },
-    { title: "রাজশাহী বিভাগ", posts: rajshahiPosts, slug: "rajshahi" },
-    { title: "খুলনা বিভাগ", posts: khulnaPosts, slug: "khulna" },
-    { title: "রংপুর বিভাগ", posts: rangpurPosts, slug: "rangpur" },
-    { title: "ময়মনসিংহ বিভাগ", posts: mymensinghPosts, slug: "mymensingh" },
-  ];
+  const posts = isNational ? natPosts : isDivision ? divPosts : isBarisal ? bslPosts : isPopular ? popPosts : isHighlighted ? hlPosts : isGallery ? galleryPosts : catPosts;
+
+  if (!(posts ?? []).length) return null;
+
+  // Popular section - numbered list
+  if (isPopular) {
+    return (
+      <>
+        <SectionTitle title={label} accent="red" />
+        {(posts as Post[] ?? []).map((news: any, i: number) => (
+          <div key={news.id} className="flex gap-2.5 py-2 border-b border-border last:border-0">
+            <span className="popular-number text-lg">{i + 1}</span>
+            <Link to={`/post/${news.slug}`} className="text-xs font-bold text-foreground hover:text-accent transition-colors flex-1 line-clamp-2">
+              {cleanText(news.title)}
+            </Link>
+          </div>
+        ))}
+      </>
+    );
+  }
+
+  // Gallery section
+  if (isGallery) {
+    return (
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-2">
+          <SectionTitle title={label} />
+          <Link to="/gallery" className="text-xs text-accent hover:underline font-medium">সব দেখুন →</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {(posts ?? []).slice(0, count).map((post: any) => (
+            <Link key={post.id} to="/gallery" className="group relative overflow-hidden rounded-lg bg-muted aspect-square">
+              {post.image_url && (
+                <img src={post.image_url} alt={cleanText(post.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute bottom-0 left-0 right-0 p-1.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                <p className="text-white text-[9px] sm:text-[10px] font-medium line-clamp-2">{cleanText(post.title)}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Highlighted - masonry 2 cols
+  if (isHighlighted) {
+    return (
+      <div className="mt-4">
+        <SectionTitle title={label} accent="red" />
+        <MasonryGrid posts={(posts as Post[] ?? []).slice(0, count)} columns={2} />
+      </div>
+    );
+  }
+
+  // Division sections in sidebar
+  if ((isDivision || isBarisal) && position === "right") {
+    return (
+      <div>
+        <SectionTitle title={label} />
+        <div className="columns-1 gap-3">
+          {(posts as Post[] ?? []).slice(0, count).map((news: any, i: number) => (
+            <MasonryCard key={news.id} news={news} size={i === 0 ? "normal" : "small"} />
+          ))}
+        </div>
+        <Link to={`/category/${sectionKey}`} className="text-[11px] text-accent hover:underline block mt-1 font-medium">
+          আরও পড়ুন →
+        </Link>
+      </div>
+    );
+  }
+
+  // Left sidebar sections
+  if (position === "left") {
+    return (
+      <>
+        <SectionTitle title={label} accent={sectionKey === "national" ? "red" : undefined} />
+        <div className="columns-1 gap-3">
+          {(posts as Post[] ?? []).map((news: any, i: number) => (
+            <MasonryCard key={news.id} news={news} size={i === 0 ? (sectionKey === "national" ? "large" : "normal") : "small"} />
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  // Center/main masonry sections
+  return (
+    <div className="mt-4">
+      <SectionTitle title={label} accent={sectionKey === "barisal" ? "red" : undefined} />
+      <MasonryGrid posts={(posts as Post[] ?? []).slice(0, count)} columns={2} />
+    </div>
+  );
+};
+
+const Index = () => {
+  usePostsRealtime();
+
+  const { data: layoutSettings } = useLayoutSettings();
+  const ls = layoutSettings ?? [];
+  const sc = (key: string, fb = 5) => getSectionCount(ls, key, fb);
+
+  // Group sections by position from database
+  const sortedSettings = [...ls].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const leftSections = sortedSettings.filter(s => s.position === "left" && s.is_visible && s.post_count > 0);
+  const centerSections = sortedSettings.filter(s => s.position === "center" && s.is_visible && s.post_count > 0);
+  const rightSections = sortedSettings.filter(s => s.position === "right" && s.is_visible && s.post_count > 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -267,218 +354,39 @@ const Index = () => {
       </div>
 
       <main className="container mx-auto px-2 sm:px-4 mt-4">
-        {/* === Pinterest-Style Masonry Layout === */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
 
-          {/* ========= LEFT SIDEBAR - Pinterest Style ========= */}
-          {sc("national") > 0 && (
+          {/* ========= LEFT SIDEBAR - Dynamic ========= */}
+          {leftSections.length > 0 && (
             <aside className="lg:col-span-3 order-3 lg:order-1 space-y-4">
-              <SectionTitle title="জাতীয় সংবাদ" accent="red" />
-              <div className="columns-1 gap-3">
-                {(nationalPosts ?? []).map((news, i) => (
-                  <MasonryCard key={news.id} news={news} size={i === 0 ? "large" : i < 3 ? "normal" : "small"} />
-                ))}
-              </div>
-
-              {sc("international") > 0 && (
-                <>
-                  <SectionTitle title="আন্তর্জাতিক" />
-                  <div className="columns-1 gap-3">
-                    {(internationalPosts ?? []).map((news) => (
-                      <MasonryCard key={news.id} news={news} size="small" />
-                    ))}
-                  </div>
-                </>
-              )}
-
+              {leftSections.map((s, i) => (
+                <DynamicSection key={s.id} sectionKey={s.section_key} label={s.section_label} count={s.post_count} position="left" />
+              ))}
               <AdSpace size="sidebar" />
-
-              {sc("politics") > 0 && (
-                <>
-                  <SectionTitle title="রাজনীতি" />
-                  <div className="columns-1 gap-3">
-                    {(politicsPosts ?? []).map((news, i) => (
-                      <MasonryCard key={news.id} news={news} size={i === 0 ? "normal" : "small"} />
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {sc("technology") > 0 && (
-                <>
-                  <SectionTitle title="প্রযুক্তি" />
-                  <div className="columns-1 gap-3">
-                    {(techPosts ?? []).map((news) => (
-                      <MasonryCard key={news.id} news={news} size="small" />
-                    ))}
-                  </div>
-                </>
-              )}
             </aside>
           )}
 
-          {/* ========= MAIN - Pinterest Masonry ========= */}
-          <div className="lg:col-span-6 order-2 lg:order-2">
+          {/* ========= MAIN - Dynamic ========= */}
+          <div className={`${leftSections.length > 0 && rightSections.length > 0 ? "lg:col-span-6" : leftSections.length > 0 || rightSections.length > 0 ? "lg:col-span-9" : "lg:col-span-12"} order-2 lg:order-2`}>
             <FeaturedSlider />
             <PhotoCardCarousel />
 
-            {/* Highlighted - masonry 2 cols */}
-            {(highlightedPosts ?? []).length > 0 && sc("highlighted") > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="📌 হাইলাইটস" accent="red" />
-                <MasonryGrid posts={(highlightedPosts ?? []).slice(0, sc("highlighted", 4))} columns={2} />
-              </div>
-            )}
+            {centerSections.map((s, i) => (
+              <DynamicSection key={s.id} sectionKey={s.section_key} label={s.section_label} count={s.post_count} position="center" />
+            ))}
 
-            {/* Barisal - Pinterest masonry */}
-            {sc("barisal") > 0 && (barisalPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="বরিশাল বিভাগ" accent="red" />
-                <MasonryGrid posts={(barisalPosts ?? []).slice(0, sc("barisal", 6))} columns={2} />
-              </div>
-            )}
-
-            <AdSpace size="banner" className="my-4" />
-
-            {/* Sports & Entertainment - masonry */}
-            {sc("sports") > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="খেলাধুলা" />
-                <MasonryGrid posts={(sportsPosts ?? []).slice(0, sc("sports", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("entertainment") > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="বিনোদন" />
-                <MasonryGrid posts={(entertainmentPosts ?? []).slice(0, sc("entertainment", 4))} columns={2} />
-              </div>
-            )}
-
-            {/* Gallery Preview */}
-            {sc("gallery") > 0 && (galleryPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <SectionTitle title="📸 ফটো গ্যালারি" />
-                  <Link to="/gallery" className="text-xs text-accent hover:underline font-medium">সব দেখুন →</Link>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {(galleryPosts ?? []).slice(0, sc("gallery", 6)).map((post) => (
-                    <Link key={post.id} to="/gallery" className="group relative overflow-hidden rounded-lg bg-muted aspect-square">
-                      {post.image_url && (
-                        <img src={post.image_url} alt={cleanText(post.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="absolute bottom-0 left-0 right-0 p-1.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                        <p className="text-white text-[9px] sm:text-[10px] font-medium line-clamp-2">{cleanText(post.title)}</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {sc("health") > 0 && (healthPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="স্বাস্থ্য" />
-                <MasonryGrid posts={(healthPosts ?? []).slice(0, sc("health", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("lifestyle") > 0 && (lifestylePosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="লাইফস্টাইল" />
-                <MasonryGrid posts={(lifestylePosts ?? []).slice(0, sc("lifestyle", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("religion") > 0 && (religionPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="ধর্ম" />
-                <MasonryGrid posts={(religionPosts ?? []).slice(0, sc("religion", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("travel") > 0 && (travelPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="ভ্রমণ" />
-                <MasonryGrid posts={(travelPosts ?? []).slice(0, sc("travel", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("people") > 0 && (peoplePosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="পিপল" />
-                <MasonryGrid posts={(peoplePosts ?? []).slice(0, sc("people", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("education") > 0 && (educationPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="শিক্ষা" />
-                <MasonryGrid posts={(educationPosts ?? []).slice(0, sc("education", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("economy") > 0 && (economyPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="অর্থনীতি" />
-                <MasonryGrid posts={(economyPosts ?? []).slice(0, sc("economy", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("crime") > 0 && (crimePosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="অপরাধ" />
-                <MasonryGrid posts={(crimePosts ?? []).slice(0, sc("crime", 4))} columns={2} />
-              </div>
-            )}
-
-            {sc("jobs") > 0 && (jobsPosts ?? []).length > 0 && (
-              <div className="mt-4">
-                <SectionTitle title="চাকরি" />
-                <MasonryGrid posts={(jobsPosts ?? []).slice(0, sc("jobs", 4))} columns={2} />
-              </div>
-            )}
+            {centerSections.length > 2 && <AdSpace size="banner" className="my-4" />}
           </div>
 
-          {/* ========= RIGHT SIDEBAR - Division Sections (mobile first) ========= */}
-          <aside className="lg:col-span-3 order-1 lg:order-3 space-y-4">
-            {divisionSections.map((section) => {
-              const count = sc(section.slug, 3);
-              if (count <= 0 || !(section.posts ?? []).length) return null;
-              return (
-                <div key={section.slug}>
-                  <SectionTitle title={section.title} />
-                  <div className="columns-1 gap-3">
-                    {(section.posts ?? []).slice(0, count).map((news, i) => (
-                      <MasonryCard key={news.id} news={news} size={i === 0 ? "normal" : "small"} />
-                    ))}
-                  </div>
-                  <Link to={`/category/${section.slug}`} className="text-[11px] text-accent hover:underline block mt-1 font-medium">
-                    আরও পড়ুন →
-                  </Link>
-                </div>
-              );
-            })}
-
-            <AdSpace size="sidebar" />
-
-            {/* Popular - numbered list */}
-            {sc("popular") > 0 && (
-              <>
-                <SectionTitle title="জনপ্রিয় সংবাদ" accent="red" />
-                {(popularPosts ?? []).map((news, i) => (
-                  <div key={news.id} className="flex gap-2.5 py-2 border-b border-border last:border-0">
-                    <span className="popular-number text-lg">{i + 1}</span>
-                    <Link to={`/post/${news.slug}`} className="text-xs font-bold text-foreground hover:text-accent transition-colors flex-1 line-clamp-2">
-                      {cleanText(news.title)}
-                    </Link>
-                  </div>
-                ))}
-              </>
-            )}
-          </aside>
+          {/* ========= RIGHT SIDEBAR - Dynamic ========= */}
+          {rightSections.length > 0 && (
+            <aside className="lg:col-span-3 order-1 lg:order-3 space-y-4">
+              {rightSections.map((s) => (
+                <DynamicSection key={s.id} sectionKey={s.section_key} label={s.section_label} count={s.post_count} position="right" />
+              ))}
+              <AdSpace size="sidebar" />
+            </aside>
+          )}
         </div>
       </main>
 
