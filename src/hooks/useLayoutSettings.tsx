@@ -8,6 +8,8 @@ export interface LayoutSetting {
   post_count: number;
   is_visible: boolean;
   sort_order: number;
+  position: string;
+  is_protected: boolean;
   updated_at: string;
 }
 
