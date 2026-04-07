@@ -69,6 +69,16 @@ const CategoryNav = () => {
             );
           })}
 
+          {/* Archive link */}
+          <li>
+            <button
+              onClick={() => { navigate("/archive"); setMobileOpen(false); }}
+              className="flex items-center gap-1 px-3 py-2.5 hover:bg-primary/80 transition-colors whitespace-nowrap w-full text-left"
+            >
+              📁 আর্কাইভ
+            </button>
+          </li>
+
           {/* Gallery link */}
           <li>
             <button

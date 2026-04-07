@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database, Archive, MapPin } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
@@ -69,6 +69,17 @@ const Admin = () => {
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
+  const [editDivision, setEditDivision] = useState("");
+  const [editDistrict, setEditDistrict] = useState("");
+  const [editUpazila, setEditUpazila] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Manual post form states
+  const [quickDivision, setQuickDivision] = useState("");
+  const [quickDistrict, setQuickDistrict] = useState("");
+  const [quickUpazila, setQuickUpazila] = useState("");
 
   // Edit category
   const [editingCat, setEditingCat] = useState<Category | null>(null);
@@ -131,6 +142,23 @@ const Admin = () => {
     setUrlFetching(false);
   };
 
+  const handleImageUpload = async (file: File): Promise<string | null> => {
+    setUploadingImage(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `post-images/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from("site-assets").upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("site-assets").getPublicUrl(path);
+      return urlData.publicUrl;
+    } catch (err: any) {
+      toast({ title: "ইমেজ আপলোড ব্যর্থ", description: err.message, variant: "destructive" });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleQuickPost = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -139,12 +167,14 @@ const Admin = () => {
       title: quickTitle, slug, content: quickContent, excerpt: (quickSummary || quickContent).substring(0, 200),
       image_url: quickImage || null, source_url: quickUrl || null, category_id: quickCategory || null,
       tags: quickTags ? quickTags.split(",").map((t) => t.trim()) : [], status: "published", author_id: user!.id,
+      division: quickDivision || null, district: quickDistrict || null, upazila: quickUpazila || null,
     });
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "পোস্ট প্রকাশিত হয়েছে" });
       setQuickTitle(""); setQuickContent(""); setQuickImage(""); setQuickUrl(""); setQuickTags(""); setQuickCategory(""); setQuickSummary("");
+      setQuickDivision(""); setQuickDistrict(""); setQuickUpazila("");
       fetchData();
     }
     setLoading(false);
@@ -342,6 +372,11 @@ const Admin = () => {
     setEditTitle(post.title);
     setEditCategory(post.category_id || "");
     setEditContent(post.content || "");
+    setEditImageUrl(post.image_url || "");
+    setEditDivision(post.division || "");
+    setEditDistrict(post.district || "");
+    setEditUpazila(post.upazila || "");
+    setEditTags((post.tags || []).join(", "));
   };
 
   const saveEdit = async () => {
@@ -349,6 +384,9 @@ const Admin = () => {
     const { error } = await supabase.from("posts").update({
       title: editTitle, category_id: editCategory || null, content: editContent,
       excerpt: cleanText(editContent).substring(0, 200),
+      image_url: editImageUrl || null,
+      division: editDivision || null, district: editDistrict || null, upazila: editUpazila || null,
+      tags: editTags ? editTags.split(",").map(t => t.trim()) : [],
     }).eq("id", editingPost.id);
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
@@ -474,6 +512,10 @@ const Admin = () => {
   const currentUpazilas = feedDistrict ? currentDistricts.find((d) => d.name === feedDistrict)?.upazilas || [] : [];
   const scrapeDistricts = scrapeDivision ? divisionDistricts[scrapeDivision] || [] : [];
   const scrapeUpazilasList = scrapeDistrict ? scrapeDistricts.find((d) => d.name === scrapeDistrict)?.upazilas || [] : [];
+  const quickDistricts = quickDivision ? divisionDistricts[quickDivision] || [] : [];
+  const quickUpazilas = quickDistrict ? quickDistricts.find((d) => d.name === quickDistrict)?.upazilas || [] : [];
+  const editDistricts = editDivision ? divisionDistricts[editDivision] || [] : [];
+  const editUpazilas = editDistrict ? editDistricts.find((d) => d.name === editDistrict)?.upazilas || [] : [];
 
   if (authLoading) return <div className="flex items-center justify-center min-h-screen">লোড হচ্ছে...</div>;
 
@@ -495,6 +537,10 @@ const Admin = () => {
           <h1 className="text-base sm:text-xl font-bold truncate">📋 এডমিন</h1>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <span className="text-[10px] sm:text-sm opacity-80 hidden sm:inline">{userRole}</span>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/archive")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+              <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-1">আর্কাইভ</span>
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => navigate("/photo-card")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
               <Camera className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline ml-1">ফটোকার্ড</span>
@@ -527,7 +573,10 @@ const Admin = () => {
         </div>
         {/* Expanded mobile actions */}
         {showMobileActions && (
-          <div className="bg-card border-t border-border p-2 grid grid-cols-5 gap-2 animate-fade-in">
+          <div className="bg-card border-t border-border p-2 grid grid-cols-6 gap-2 animate-fade-in">
+            <button onClick={() => { navigate("/archive"); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Archive className="w-4 h-4" />আর্কাইভ
+            </button>
             <button onClick={() => { const el = document.querySelector('[data-value="scraper"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Globe className="w-4 h-4" />স্ক্র্যাপার
             </button>
@@ -596,7 +645,20 @@ const Admin = () => {
                   )}
                   <Input placeholder="শিরোনাম *" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} required className="text-sm h-9" />
                   <Textarea placeholder="কন্টেন্ট" value={quickContent} onChange={(e) => setQuickContent(e.target.value)} rows={4} className="text-sm" />
-                  <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} className="text-sm h-9" />
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} className="text-sm h-9" />
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) { const url = await handleImageUpload(file); if (url) setQuickImage(url); }
+                      }} />
+                      <Button type="button" variant="outline" size="sm" className="h-9" asChild disabled={uploadingImage}>
+                        <span><Upload className="w-3.5 h-3.5 mr-1" />{uploadingImage ? "..." : "আপলোড"}</span>
+                      </Button>
+                    </label>
+                  </div>
                   {quickImage && <img src={quickImage} alt="preview" className="h-16 object-cover rounded" />}
                   <select className="w-full border rounded-md p-2 bg-background text-sm" value={quickCategory} onChange={(e) => setQuickCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন করুন</option>
@@ -609,6 +671,23 @@ const Admin = () => {
                       </optgroup>
                     ))}
                   </select>
+                  {/* Division / District / Upazila */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickDivision} onChange={(e) => { setQuickDivision(e.target.value); setQuickDistrict(""); setQuickUpazila(""); }}>
+                      <option value="">বিভাগ</option>
+                      {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                        <option key={k} value={k}>{v}</option>
+                      )}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickDistrict} onChange={(e) => { setQuickDistrict(e.target.value); setQuickUpazila(""); }} disabled={!quickDivision}>
+                      <option value="">জেলা</option>
+                      {quickDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickUpazila} onChange={(e) => setQuickUpazila(e.target.value)} disabled={!quickDistrict}>
+                      <option value="">উপজেলা</option>
+                      {quickUpazilas.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
                   <Input placeholder="ট্যাগ (কমা দিয়ে আলাদা)" value={quickTags} onChange={(e) => setQuickTags(e.target.value)} className="text-sm h-9" />
                   <Button type="submit" disabled={loading} className="w-full h-9 text-sm">
                     <Plus className="w-3.5 h-3.5 mr-1" />পোস্ট করুন
@@ -642,6 +721,38 @@ const Admin = () => {
                     ))}
                   </select>
                   <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} placeholder="কন্টেন্ট" className="text-sm" />
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Input placeholder="ইমেজ URL" value={editImageUrl} onChange={(e) => setEditImageUrl(e.target.value)} className="text-sm h-8" />
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) { const url = await handleImageUpload(file); if (url) setEditImageUrl(url); }
+                      }} />
+                      <Button type="button" variant="outline" size="sm" className="h-8" asChild disabled={uploadingImage}>
+                        <span><Upload className="w-3 h-3 mr-1" />{uploadingImage ? "..." : "আপলোড"}</span>
+                      </Button>
+                    </label>
+                  </div>
+                  {editImageUrl && <img src={editImageUrl} alt="preview" className="h-12 object-cover rounded" />}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editDivision} onChange={(e) => { setEditDivision(e.target.value); setEditDistrict(""); setEditUpazila(""); }}>
+                      <option value="">বিভাগ</option>
+                      {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                        <option key={k} value={k}>{v}</option>
+                      )}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editDistrict} onChange={(e) => { setEditDistrict(e.target.value); setEditUpazila(""); }} disabled={!editDivision}>
+                      <option value="">জেলা</option>
+                      {editDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-xs" value={editUpazila} onChange={(e) => setEditUpazila(e.target.value)} disabled={!editDistrict}>
+                      <option value="">উপজেলা</option>
+                      {editUpazilas.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <Input value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder="ট্যাগ (কমা দিয়ে আলাদা)" className="text-sm h-8" />
                   <Button onClick={saveEdit} size="sm"><Save className="w-3.5 h-3.5 mr-1" />সেভ</Button>
                 </CardContent>
               </Card>
