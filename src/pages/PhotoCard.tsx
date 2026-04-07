@@ -141,6 +141,12 @@ const PhotoCard = () => {
   const [aiSummary, setAiSummary] = useState("");
   const [aiTags, setAiTags] = useState<string[]>([]);
 
+  // External card upload states
+  const [externalCardImage, setExternalCardImage] = useState<string | null>(null);
+  const [externalCardAiResult, setExternalCardAiResult] = useState<{ title?: string; quote?: string; sourceUrl?: string; content?: string } | null>(null);
+  const [externalCardAiLoading, setExternalCardAiLoading] = useState(false);
+  const [postingExternalCard, setPostingExternalCard] = useState(false);
+
   const extractQuotesLocally = useCallback((text: string) => {
     const cleaned = text.replace(/^শিরোনাম\s*:\s*/i, "").replace(/\s+/g, " ").trim();
     if (!cleaned) return [];
