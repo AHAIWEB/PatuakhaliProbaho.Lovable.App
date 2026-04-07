@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database } from "lucide-react";
+import { Star, Trash2, Edit, Plus, Rss, Newspaper, Tag, RefreshCw, Highlighter, Link2, Save, X, Search, Camera, Globe, ExternalLink, Share2, ArrowUp, ArrowDown, GripVertical, Settings2, Eye, EyeOff, Minus, Upload, Image, Send, Database, Archive, MapPin } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useSiteSetting, useUpdateSiteSetting } from "@/hooks/useSiteSettings";
 import type { Tables } from "@/integrations/supabase/types";
@@ -69,6 +69,17 @@ const Admin = () => {
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
+  const [editDivision, setEditDivision] = useState("");
+  const [editDistrict, setEditDistrict] = useState("");
+  const [editUpazila, setEditUpazila] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Manual post form states
+  const [quickDivision, setQuickDivision] = useState("");
+  const [quickDistrict, setQuickDistrict] = useState("");
+  const [quickUpazila, setQuickUpazila] = useState("");
 
   // Edit category
   const [editingCat, setEditingCat] = useState<Category | null>(null);
