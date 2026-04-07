@@ -645,7 +645,20 @@ const Admin = () => {
                   )}
                   <Input placeholder="শিরোনাম *" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} required className="text-sm h-9" />
                   <Textarea placeholder="কন্টেন্ট" value={quickContent} onChange={(e) => setQuickContent(e.target.value)} rows={4} className="text-sm" />
-                  <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} className="text-sm h-9" />
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Input placeholder="ইমেজ URL" value={quickImage} onChange={(e) => setQuickImage(e.target.value)} className="text-sm h-9" />
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) { const url = await handleImageUpload(file); if (url) setQuickImage(url); }
+                      }} />
+                      <Button type="button" variant="outline" size="sm" className="h-9" asChild disabled={uploadingImage}>
+                        <span><Upload className="w-3.5 h-3.5 mr-1" />{uploadingImage ? "..." : "আপলোড"}</span>
+                      </Button>
+                    </label>
+                  </div>
                   {quickImage && <img src={quickImage} alt="preview" className="h-16 object-cover rounded" />}
                   <select className="w-full border rounded-md p-2 bg-background text-sm" value={quickCategory} onChange={(e) => setQuickCategory(e.target.value)}>
                     <option value="">ক্যাটাগরি নির্বাচন করুন</option>
@@ -658,6 +671,23 @@ const Admin = () => {
                       </optgroup>
                     ))}
                   </select>
+                  {/* Division / District / Upazila */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickDivision} onChange={(e) => { setQuickDivision(e.target.value); setQuickDistrict(""); setQuickUpazila(""); }}>
+                      <option value="">বিভাগ</option>
+                      {Object.entries({ barisal: "বরিশাল", dhaka: "ঢাকা", chittagong: "চট্টগ্রাম", sylhet: "সিলেট", rajshahi: "রাজশাহী", rangpur: "রংপুর", khulna: "খুলনা", mymensingh: "ময়মনসিংহ" }).map(([k, v]) =>
+                        <option key={k} value={k}>{v}</option>
+                      )}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickDistrict} onChange={(e) => { setQuickDistrict(e.target.value); setQuickUpazila(""); }} disabled={!quickDivision}>
+                      <option value="">জেলা</option>
+                      {quickDistricts.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <select className="border rounded-md p-1.5 bg-background text-sm" value={quickUpazila} onChange={(e) => setQuickUpazila(e.target.value)} disabled={!quickDistrict}>
+                      <option value="">উপজেলা</option>
+                      {quickUpazilas.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
                   <Input placeholder="ট্যাগ (কমা দিয়ে আলাদা)" value={quickTags} onChange={(e) => setQuickTags(e.target.value)} className="text-sm h-9" />
                   <Button type="submit" disabled={loading} className="w-full h-9 text-sm">
                     <Plus className="w-3.5 h-3.5 mr-1" />পোস্ট করুন
