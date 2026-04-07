@@ -13,6 +13,7 @@ import PhotoCard from "./pages/PhotoCard.tsx";
 import Gallery from "./pages/Gallery.tsx";
 import CategoryPage from "./pages/CategoryPage.tsx";
 import PostDetail from "./pages/PostDetail.tsx";
+import Archive from "./pages/Archive.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
