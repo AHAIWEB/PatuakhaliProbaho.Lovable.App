@@ -573,7 +573,10 @@ const Admin = () => {
         </div>
         {/* Expanded mobile actions */}
         {showMobileActions && (
-          <div className="bg-card border-t border-border p-2 grid grid-cols-5 gap-2 animate-fade-in">
+          <div className="bg-card border-t border-border p-2 grid grid-cols-6 gap-2 animate-fade-in">
+            <button onClick={() => { navigate("/archive"); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
+              <Archive className="w-4 h-4" />আর্কাইভ
+            </button>
             <button onClick={() => { const el = document.querySelector('[data-value="scraper"]') as HTMLElement; el?.click(); setShowMobileActions(false); }} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted text-[9px]">
               <Globe className="w-4 h-4" />স্ক্র্যাপার
             </button>
