@@ -27,6 +27,15 @@ function isPrivateUrl(urlStr: string): boolean {
   }
 }
 
+async function getSupabaseClient(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    authHeader ? { global: { headers: { Authorization: authHeader } } } : undefined
+  );
+}
+
 async function verifyAdmin(req: Request): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -90,7 +99,18 @@ function extractArticleContent(html: string): string {
   return text || extractText(html).substring(0, 2000);
 }
 
-// ===== Enhanced keyword-based AI system =====
+function extractArticleHtml(html: string): string {
+  const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+  if (articleMatch) return articleMatch[1];
+  const contentPatterns = [
+    /<div[^>]*class="[^"]*(?:entry-content|post-content|article-body|story-body|news-content|content-area)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+  ];
+  for (const pattern of contentPatterns) {
+    const match = html.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
 
 const categoryKeywords: Record<string, string[]> = {
   national: ["জাতীয়", "national", "bangladesh", "বাংলাদেশ", "সরকার", "মন্ত্রী", "সংসদ", "প্রধানমন্ত্রী", "রাষ্ট্রপতি", "দেশ", "জাতি"],
@@ -155,7 +175,6 @@ function extractTags(text: string): string[] {
 
 function extractQuotes(text: string): string[] {
   const quotes: string[] = [];
-  // Bengali/English quote patterns
   const patterns = [
     /[❝"❞"']([\s\S]{15,200}?)[❝"❞"']/g,
     /[']([\s\S]{15,200}?)['']/g,
@@ -174,6 +193,20 @@ function extractQuotes(text: string): string[] {
   return quotes;
 }
 
+function extractAuthor(html: string): string | null {
+  const patterns = [
+    /<meta[^>]*name="author"[^>]*content="([^"]+)"/i,
+    /<meta[^>]*content="([^"]+)"[^>]*name="author"/i,
+    /<span[^>]*class="[^"]*author[^"]*"[^>]*>([^<]+)<\/span>/i,
+    /<a[^>]*class="[^"]*author[^"]*"[^>]*>([^<]+)<\/a>/i,
+  ];
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -184,7 +217,7 @@ Deno.serve(async (req) => {
     const authError = await verifyAdmin(req);
     if (authError) return authError;
 
-    const { url, fullContent } = await req.json();
+    const { url, fullContent, save } = await req.json();
     if (!url || typeof url !== "string") {
       return new Response(JSON.stringify({ error: "URL required" }), {
         status: 400,
@@ -240,11 +273,14 @@ Deno.serve(async (req) => {
     const siteName = siteMatch?.[1]?.trim() || new URL(url).hostname;
     const publishedAt = dateMatch?.[1]?.trim() || "";
     const metaCategory = categoryMatch?.[1]?.trim() || "";
+    const author = extractAuthor(html);
 
     // Extract full content if requested
     let content = description;
-    if (fullContent) {
+    let htmlContent = "";
+    if (fullContent || save) {
       content = extractArticleContent(html);
+      htmlContent = extractArticleHtml(html);
       if (content.length < 50) content = description;
     }
 
@@ -255,8 +291,27 @@ Deno.serve(async (req) => {
     const autoTags = metaTags.length > 0 ? metaTags : extractTags(fullText);
     const quotes = extractQuotes(content || description);
 
+    // Save to archived_articles if requested
+    if (save && title) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await serviceClient.from("archived_articles").upsert({
+        source_url: url,
+        title,
+        content,
+        html_content: htmlContent.substring(0, 50000),
+        featured_image: image || null,
+        category: category || null,
+        author: author || siteName,
+        published_date: publishedAt || null,
+        scraped_at: new Date().toISOString(),
+      }, { onConflict: "source_url" });
+    }
+
     return new Response(
-      JSON.stringify({ title, description, content, image, siteName, url, publishedAt, category, tags: autoTags, summary, quotes }),
+      JSON.stringify({ title, description, content, image, siteName, url, publishedAt, category, tags: autoTags, summary, quotes, author }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
