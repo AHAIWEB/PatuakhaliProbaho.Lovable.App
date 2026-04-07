@@ -372,6 +372,11 @@ const Admin = () => {
     setEditTitle(post.title);
     setEditCategory(post.category_id || "");
     setEditContent(post.content || "");
+    setEditImageUrl(post.image_url || "");
+    setEditDivision(post.division || "");
+    setEditDistrict(post.district || "");
+    setEditUpazila(post.upazila || "");
+    setEditTags((post.tags || []).join(", "));
   };
 
   const saveEdit = async () => {
@@ -379,6 +384,9 @@ const Admin = () => {
     const { error } = await supabase.from("posts").update({
       title: editTitle, category_id: editCategory || null, content: editContent,
       excerpt: cleanText(editContent).substring(0, 200),
+      image_url: editImageUrl || null,
+      division: editDivision || null, district: editDistrict || null, upazila: editUpazila || null,
+      tags: editTags ? editTags.split(",").map(t => t.trim()) : [],
     }).eq("id", editingPost.id);
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
