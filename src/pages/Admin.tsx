@@ -142,6 +142,23 @@ const Admin = () => {
     setUrlFetching(false);
   };
 
+  const handleImageUpload = async (file: File): Promise<string | null> => {
+    setUploadingImage(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `post-images/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from("site-assets").upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("site-assets").getPublicUrl(path);
+      return urlData.publicUrl;
+    } catch (err: any) {
+      toast({ title: "ইমেজ আপলোড ব্যর্থ", description: err.message, variant: "destructive" });
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleQuickPost = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -150,12 +167,14 @@ const Admin = () => {
       title: quickTitle, slug, content: quickContent, excerpt: (quickSummary || quickContent).substring(0, 200),
       image_url: quickImage || null, source_url: quickUrl || null, category_id: quickCategory || null,
       tags: quickTags ? quickTags.split(",").map((t) => t.trim()) : [], status: "published", author_id: user!.id,
+      division: quickDivision || null, district: quickDistrict || null, upazila: quickUpazila || null,
     });
     if (error) {
       toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "সফল", description: "পোস্ট প্রকাশিত হয়েছে" });
       setQuickTitle(""); setQuickContent(""); setQuickImage(""); setQuickUrl(""); setQuickTags(""); setQuickCategory(""); setQuickSummary("");
+      setQuickDivision(""); setQuickDistrict(""); setQuickUpazila("");
       fetchData();
     }
     setLoading(false);
