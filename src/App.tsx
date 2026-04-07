@@ -13,6 +13,7 @@ import PhotoCard from "./pages/PhotoCard.tsx";
 import Gallery from "./pages/Gallery.tsx";
 import CategoryPage from "./pages/CategoryPage.tsx";
 import PostDetail from "./pages/PostDetail.tsx";
+import Archive from "./pages/Archive.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/category/:slug" element={<CategoryPage />} />
             <Route path="/post/:slug" element={<PostDetail />} />
+            <Route path="/archive" element={<Archive />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
