@@ -512,6 +512,10 @@ const Admin = () => {
   const currentUpazilas = feedDistrict ? currentDistricts.find((d) => d.name === feedDistrict)?.upazilas || [] : [];
   const scrapeDistricts = scrapeDivision ? divisionDistricts[scrapeDivision] || [] : [];
   const scrapeUpazilasList = scrapeDistrict ? scrapeDistricts.find((d) => d.name === scrapeDistrict)?.upazilas || [] : [];
+  const quickDistricts = quickDivision ? divisionDistricts[quickDivision] || [] : [];
+  const quickUpazilas = quickDistrict ? quickDistricts.find((d) => d.name === quickDistrict)?.upazilas || [] : [];
+  const editDistricts = editDivision ? divisionDistricts[editDivision] || [] : [];
+  const editUpazilas = editDistrict ? editDistricts.find((d) => d.name === editDistrict)?.upazilas || [] : [];
 
   if (authLoading) return <div className="flex items-center justify-center min-h-screen">লোড হচ্ছে...</div>;
 
