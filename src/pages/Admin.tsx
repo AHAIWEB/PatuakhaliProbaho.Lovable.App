@@ -537,6 +537,10 @@ const Admin = () => {
           <h1 className="text-base sm:text-xl font-bold truncate">📋 এডমিন</h1>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <span className="text-[10px] sm:text-sm opacity-80 hidden sm:inline">{userRole}</span>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/archive")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+              <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-1">আর্কাইভ</span>
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => navigate("/photo-card")} className="h-7 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
               <Camera className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline ml-1">ফটোকার্ড</span>
