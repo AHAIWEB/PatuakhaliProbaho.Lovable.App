@@ -1127,6 +1127,88 @@ ${qrUrl ? `<p><a href="${qrUrl}" target="_blank">বিস্তারিত প
               </CardContent>
             </Card>
 
+            {/* External Card Upload + AI Content Extraction */}
+            <Card>
+              <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">📤 বাহিরের কার্ড আপলোড + AI কন্টেন্ট</CardTitle></CardHeader>
+              <CardContent className="p-3 pt-1 space-y-2">
+                <p className="text-[10px] text-muted-foreground">ডিজাইন করা ফটোকার্ড আপলোড করুন — AI শিরোনাম/কোটেশন পড়ে সোর্স থেকে কন্টেন্ট পোস্টে যুক্ত করবে।</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="external-card-upload"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                      const dataUrl = reader.result as string;
+                      setExternalCardImage(dataUrl);
+                      setExternalCardAiResult(null);
+                      toast({ title: "কার্ড লোড হয়েছে। AI প্রসেস শুরু করুন।" });
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                <Button onClick={() => document.getElementById("external-card-upload")?.click()} variant="outline" size="sm" className="h-9 text-xs w-full">
+                  <Upload className="w-3.5 h-3.5 mr-1" />বাহিরের কার্ড আপলোড করুন
+                </Button>
+                {externalCardImage && (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <img src={externalCardImage} alt="Uploaded card" className="w-full rounded-lg border max-h-64 object-contain" />
+                      <button onClick={() => { setExternalCardImage(null); setExternalCardAiResult(null); }} className="absolute top-1 right-1 bg-destructive text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">✕</button>
+                    </div>
+                    <Button 
+                      onClick={handleExternalCardAi} 
+                      disabled={externalCardAiLoading} 
+                      className="w-full h-9 text-xs"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 mr-1 ${externalCardAiLoading ? "animate-spin" : ""}`} />
+                      {externalCardAiLoading ? "AI পড়ছে..." : "🤖 AI দিয়ে শিরোনাম/কোটেশন পড়ুন"}
+                    </Button>
+                    {externalCardAiResult && (
+                      <div className="space-y-1.5 bg-muted/50 rounded-lg p-2">
+                        {externalCardAiResult.title && (
+                          <div>
+                            <span className="text-[10px] font-medium text-muted-foreground">শিরোনাম:</span>
+                            <p className="text-xs font-bold">{externalCardAiResult.title}</p>
+                            <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-0.5" onClick={() => { setCustomTitle(externalCardAiResult.title!); toast({ title: "শিরোনাম যুক্ত হয়েছে" }); }}>
+                              ← শিরোনামে ব্যবহার করুন
+                            </Button>
+                          </div>
+                        )}
+                        {externalCardAiResult.quote && (
+                          <div>
+                            <span className="text-[10px] font-medium text-muted-foreground">কোটেশন:</span>
+                            <p className="text-[11px] italic">❝ {externalCardAiResult.quote} ❞</p>
+                            <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-0.5" onClick={() => { setCustomQuote(externalCardAiResult.quote!); toast({ title: "কোটেশন যুক্ত হয়েছে" }); }}>
+                              ← কোটেশনে ব্যবহার করুন
+                            </Button>
+                          </div>
+                        )}
+                        {externalCardAiResult.sourceUrl && (
+                          <div>
+                            <span className="text-[10px] font-medium text-muted-foreground">সোর্স URL:</span>
+                            <p className="text-[11px] text-accent truncate">{externalCardAiResult.sourceUrl}</p>
+                          </div>
+                        )}
+                        <Button 
+                          onClick={handlePostExternalCard} 
+                          disabled={postingExternalCard} 
+                          variant="secondary" 
+                          className="w-full h-8 text-xs"
+                        >
+                          <Send className={`w-3 h-3 mr-1 ${postingExternalCard ? "animate-spin" : ""}`} />
+                          {postingExternalCard ? "পোস্ট হচ্ছে..." : "📰 সাইটে পোস্ট করুন (কার্ড + কন্টেন্ট)"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Image Uploads */}
             <Card>
               <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">📷 ছবি ও ফ্রেম</CardTitle></CardHeader>
